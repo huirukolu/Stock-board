@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Steve's Stock Dashboard</title>
+<style>
+:root{
+  --bg:#07090c; --panel:#11151b; --panel2:#171c24; --text:#f4f7fb;
+  --muted:#9aa6b2; --line:#2a313b; --green:#18d65b; --red:#ff5c4d;
+  --accent:#5aa7ff; --yellow:#ffd166;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Arial,Helvetica,sans-serif}
+header{position:sticky;top:0;z-index:10;background:rgba(7,9,12,.96);border-bottom:1px solid var(--line);padding:18px 22px}
+h1{font-size:28px;margin:0 0 4px}.sub{color:var(--muted);font-size:14px}
+.wrap{max-width:1500px;margin:auto;padding:20px}
+.controls{display:grid;grid-template-columns:2fr 1fr auto auto;gap:10px;margin:0 0 18px}
+input,select,button{border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:10px;padding:12px 13px;font-size:15px}
+button{cursor:pointer;font-weight:700} button:hover{border-color:var(--accent)}
+.primary{background:#173a63;border-color:#2a6eb2}.danger{color:#ffb3ab}
+.status{min-height:22px;color:var(--muted);margin-bottom:12px}
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px}
+.card h2{font-size:20px;margin:0 0 10px}.rank-row{display:grid;grid-template-columns:35px 1fr auto;gap:8px;padding:9px 4px;border-top:1px solid var(--line)}
+.rank-row:first-of-type{border-top:0}.ticker{font-weight:800}.name{color:var(--muted);font-size:13px}
+.pos{color:var(--green)}.neg{color:var(--red)}.flat{color:var(--muted)}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.tablebox{overflow:auto;border:1px solid var(--line);border-radius:14px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;min-width:980px}
+th,td{padding:13px 12px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th{position:sticky;top:0;background:var(--panel2);color:#cbd5df;font-size:13px;cursor:pointer}
+th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}
+tr:hover{background:#151a21}.symbol{font-size:17px;font-weight:800}.company{color:var(--muted)}
+.badge{display:inline-block;min-width:82px;padding:7px 9px;border-radius:9px;border:1px solid;text-align:center;font-weight:800}
+.badge.pos{border-color:var(--green)}.badge.neg{border-color:var(--red)}
+.small{font-size:12px;color:var(--muted)}
+.settings{margin-top:18px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}
+.settings summary{cursor:pointer;font-weight:800;font-size:18px}
+.settings-grid{display:grid;grid-template-columns:2fr auto;gap:10px;margin-top:14px}
+.note{color:var(--muted);font-size:13px;line-height:1.45}
+footer{color:var(--muted);font-size:12px;padding:22px 0 45px}
+@media(max-width:800px){
+  .controls{grid-template-columns:1fr 1fr}.controls input{grid-column:1/-1}
+  .cards{grid-template-columns:1fr}.wrap{padding:12px}header{padding:14px}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Steve's Stock Dashboard</h1>
+  <div class="sub">Free-data watchlist • automatic top gainers and biggest losers</div>
+</header>
+
+<div class="wrap">
+  <div class="controls">
+    <input id="search" placeholder="Search ticker or company">
+    <select id="sort">
+      <option value="changeDesc">Highest gain first</option>
+      <option value="changeAsc">Biggest loss first</option>
+      <option value="symbol">Alphabetical</option>
+      <option value="priceDesc">Highest price</option>
+    </select>
+    <button class="primary" id="refreshBtn">Refresh quotes</button>
+    <button id="stopBtn">Stop</button>
+  </div>
+
+  <div id="status" class="status">Enter a free Finnhub API key in Settings, then press Refresh quotes.</div>
+
+  <section class="cards">
+    <div class="card">
+      <h2>🚀 Top Gainers Today</h2>
+      <div id="gainers"><div class="small">Waiting for quote data…</div></div>
+    </div>
+    <div class="card">
+      <h2>📉 Biggest Losers Today</h2>
+      <div id="losers"><div class="small">Waiting for quote data…</div></div>
+    </div>
+  </section>
+
+  <div class="toolbar">
+    <input id="newTicker" placeholder="Add ticker, e.g. ANET" style="width:210px">
+    <button id="addBtn">Add ticker</button>
+    <button id="exportBtn">Export watchlist</button>
+    <button id="resetBtn" class="danger">Reset original list</button>
+  </div>
+
+  <div class="tablebox">
+    <table>
+      <thead>
+        <tr>
+          <th data-sort="symbol">Ticker</th>
+          <th data-sort="name">Company</th>
+          <th data-sort="price">Price</th>
+          <th data-sort="change">Day %</th>
+          <th data-sort="dollarChange">Day $</th>
+          <th data-sort="high">Day High</th>
+          <th data-sort="low">Day Low</th>
+          <th data-sort="prevClose">Previous Close</th>
+          <th>Remove</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+
+  <details class="settings" open>
+    <summary>Settings — free market-data connection</summary>
+    <div class="settings-grid">
+      <input id="apiKey" type="password" placeholder="Paste your free Finnhub API key">
+      <button id="saveKeyBtn">Save key on this device</button>
+    </div>
+    <p class="note">
+      The key stays in this browser's local storage. It is not sent anywhere except Finnhub when retrieving quotes.
+      The dashboard spaces requests out to stay within the free-plan limit. With a large watchlist, a full refresh can take about one minute.
+      Quotes and availability are controlled by the free data provider and may be delayed or incomplete.
+    </p>
+  </details>
+
+  <footer>
+    Personal research dashboard only. Verify important prices and account information in Fidelity or Robinhood before trading.
+  </footer>
+</div>
+
+<script>
+const ORIGINAL = [
+["VTI","Vanguard Total Stock Market ETF"],["TSM","Taiwan Semiconductor"],["QQQM","Invesco NASDAQ 100 ETF"],
+["META","Meta Platforms"],["MU","Micron Technology"],["TEL","TE Connectivity"],["NVDA","NVIDIA"],
+["AVGO","Broadcom"],["GEV","GE Vernova"],["APH","Amphenol"],["NVT","nVent Electric"],["AMAT","Applied Materials"],
+["SOXQ","Invesco Semiconductor ETF"],["TTE","TotalEnergies"],["ALGM","Allegro MicroSystems"],["LRCX","Lam Research"],
+["RTX","RTX Corporation"],["RMBS","Rambus"],["BYDDY","BYD Company"],["CEG","Constellation Energy"],
+["VST","Vistra"],["VRT","Vertiv"],["CRDO","Credo Technology"],["GLO","Clough Global Opportunities"],
+["FN","Fabrinet"],["MELI","MercadoLibre"],["PYPL","PayPal"],["KLAC","KLA"],["FLEX","Flex"],
+["AMD","Advanced Micro Devices"],["NBIS","Nebius Group"],["MRVL","Marvell Technology"],["CMI","Cummins"],
+["CAT","Caterpillar"],["EQT","EQT"],["HWM","Howmet Aerospace"],["ET","Energy Transfer"],
+["ONTO","Onto Innovation"],["SKYHV","SK hynix ADR"],["RKLB","Rocket Lab"],["ETN","Eaton"],
+["SNDK","SanDisk"],["HPE","Hewlett Packard Enterprise"],["IONQ","IonQ"],["ZTS","Zoetis"],
+["WDC","Western Digital"],["DELL","Dell Technologies"],["CSCO","Cisco Systems"],["DUK","Duke Energy"]
+];
+
+let watchlist = JSON.parse(localStorage.getItem("steveWatchlist") || "null") || ORIGINAL.map(x=>({symbol:x[0],name:x[1]}));
+let quotes = {};
+let stopped = false;
+let sortMode = "changeDesc";
+
+const $ = id => document.getElementById(id);
+$("apiKey").value = localStorage.getItem("finnhubKey") || "";
+
+function saveList(){ localStorage.setItem("steveWatchlist", JSON.stringify(watchlist)); }
+function fmt(v,d=2){ return Number.isFinite(v) ? v.toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d}) : "—"; }
+function cls(v){ return v>0?"pos":v<0?"neg":"flat"; }
+
+function rows(){
+  const query=$("search").value.trim().toLowerCase();
+  let data=watchlist.map(w=>({...w,...(quotes[w.symbol]||{})}));
+  if(query) data=data.filter(x=>x.symbol.toLowerCase().includes(query)||x.name.toLowerCase().includes(query));
+  const sorters={
+    changeDesc:(a,b)=>(b.change??-Infinity)-(a.change??-Infinity),
+    changeAsc:(a,b)=>(a.change??Infinity)-(b.change??Infinity),
+    symbol:(a,b)=>a.symbol.localeCompare(b.symbol),
+    priceDesc:(a,b)=>(b.price??-Infinity)-(a.price??-Infinity),
+    name:(a,b)=>a.name.localeCompare(b.name),
+    price:(a,b)=>(b.price??-Infinity)-(a.price??-Infinity),
+    change:(a,b)=>(b.change??-Infinity)-(a.change??-Infinity),
+    dollarChange:(a,b)=>(b.dollarChange??-Infinity)-(a.dollarChange??-Infinity),
+    high:(a,b)=>(b.high??-Infinity)-(a.high??-Infinity),
+    low:(a,b)=>(b.low??-Infinity)-(a.low??-Infinity),
+    prevClose:(a,b)=>(b.prevClose??-Infinity)-(a.prevClose??-Infinity)
+  };
+  data.sort(sorters[sortMode]||sorters.changeDesc);
+  return data;
+}
+
+function render(){
+  $("tbody").innerHTML=rows().map(x=>`
+    <tr>
+      <td class="symbol">${x.symbol}</td>
+      <td class="company">${x.name}</td>
+      <td>$${fmt(x.price)}</td>
+      <td><span class="badge ${cls(x.change)}">${Number.isFinite(x.change)?(x.change>=0?"+":"")+fmt(x.change)+"%":"—"}</span></td>
+      <td class="${cls(x.dollarChange)}">${Number.isFinite(x.dollarChange)?(x.dollarChange>=0?"+$":"-$")+fmt(Math.abs(x.dollarChange)):"—"}</td>
+      <td>$${fmt(x.high)}</td>
+      <td>$${fmt(x.low)}</td>
+      <td>$${fmt(x.prevClose)}</td>
+      <td><button onclick="removeTicker('${x.symbol}')">Remove</button></td>
+    </tr>`).join("");
+
+  const available=watchlist.map(w=>({...w,...(quotes[w.symbol]||{})})).filter(x=>Number.isFinite(x.change));
+  const gainers=[...available].sort((a,b)=>b.change-a.change).slice(0,5);
+  const losers=[...available].sort((a,b)=>a.change-b.change).slice(0,5);
+  $("gainers").innerHTML=rankHTML(gainers);
+  $("losers").innerHTML=rankHTML(losers);
+}
+function rankHTML(items){
+  if(!items.length) return '<div class="small">Waiting for quote data…</div>';
+  return items.map((x,i)=>`<div class="rank-row"><div>${i+1}</div><div><div class="ticker">${x.symbol}</div><div class="name">${x.name}</div></div><div class="${cls(x.change)}"><b>${x.change>=0?"+":""}${fmt(x.change)}%</b></div></div>`).join("");
+}
+
+async function fetchQuote(symbol,key){
+  const url=`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${encodeURIComponent(key)}`;
+  const r=await fetch(url);
+  if(!r.ok) throw new Error(`HTTP ${r.status}`);
+  const q=await r.json();
+  if(!q || !q.c) throw new Error("No quote");
+  return {price:q.c, dollarChange:q.d, change:q.dp, high:q.h, low:q.l, prevClose:q.pc, timestamp:q.t};
+}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+async function refreshAll(){
+  const key=$("apiKey").value.trim();
+  if(!key){ $("status").textContent="Please enter and save a free Finnhub API key first."; return; }
+  stopped=false;
+  $("refreshBtn").disabled=true;
+  let ok=0, failed=0;
+  for(let i=0;i<watchlist.length;i++){
+    if(stopped) break;
+    const s=watchlist[i].symbol;
+    $("status").textContent=`Loading ${i+1} of ${watchlist.length}: ${s}…`;
+    try{ quotes[s]=await fetchQuote(s,key); ok++; }
+    catch(e){ failed++; console.warn(s,e); }
+    render();
+    if(i<watchlist.length-1) await sleep(1100);
+  }
+  $("refreshBtn").disabled=false;
+  $("status").textContent=stopped ? `Refresh stopped. Loaded ${ok}; unavailable ${failed}.`
+    : `Refresh complete: ${ok} loaded, ${failed} unavailable. Last refresh ${new Date().toLocaleTimeString()}.`;
+}
+function removeTicker(s){ watchlist=watchlist.filter(x=>x.symbol!==s); delete quotes[s]; saveList(); render(); }
+window.removeTicker=removeTicker;
+
+$("saveKeyBtn").onclick=()=>{ localStorage.setItem("finnhubKey",$("apiKey").value.trim()); $("status").textContent="API key saved on this device."; };
+$("refreshBtn").onclick=refreshAll;
+$("stopBtn").onclick=()=>{stopped=true};
+$("search").oninput=render;
+$("sort").onchange=e=>{sortMode=e.target.value;render()};
+$("addBtn").onclick=()=>{
+  const s=$("newTicker").value.trim().toUpperCase();
+  if(!s)return;
+  if(!watchlist.some(x=>x.symbol===s)){watchlist.push({symbol:s,name:s});saveList();}
+  $("newTicker").value="";render();
+};
+$("resetBtn").onclick=()=>{
+  if(confirm("Restore the original watchlist from your screenshots?")){
+    watchlist=ORIGINAL.map(x=>({symbol:x[0],name:x[1]}));quotes={};saveList();render();
+  }
+};
+$("exportBtn").onclick=()=>{
+  const blob=new Blob([JSON.stringify(watchlist,null,2)],{type:"application/json"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="stock-watchlist.json";a.click();URL.revokeObjectURL(a.href);
+};
+document.querySelectorAll("th[data-sort]").forEach(th=>th.onclick=()=>{sortMode=th.dataset.sort;render();});
+render();
+</script>
+</body>
+</html>
