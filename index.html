@@ -72,7 +72,7 @@ summary{font-weight:850;cursor:pointer}.settings{display:grid;gap:9px;margin-top
     <button id="refresh" class="primary">Refresh</button>
     <button id="stop">Stop</button>
   </div>
-  <div id="status" class="status">Press Refresh. A Finnhub key is optional and is used only as a backup for current quotes.</div>
+  <div id="status" class="status">Loading live prices. Finnhub supplies current quotes; the board refreshes automatically every 5 minutes.</div>
 
   <div class="tabs">
     <button class="active" data-view="all">All stocks</button>
@@ -98,10 +98,10 @@ summary{font-weight:850;cursor:pointer}.settings{display:grid;gap:9px;margin-top
   <details>
     <summary>Settings — free market data</summary>
     <div class="settings">
-      <input id="apiKey" type="password" placeholder="Optional Finnhub API key for backup quotes">
+      <input id="apiKey" type="password" placeholder="Finnhub API key for live quotes">
       <button id="saveKey">Save key on this device</button>
       <div class="note">
-        The dashboard now uses one consistent Yahoo daily-price series for the current price, previous close, 2026 average, high, low and gain/loss. This avoids split-adjustment mismatches. A Finnhub key is optional and is used only if Yahoo history is unavailable. Verify prices in Fidelity or Robinhood before trading.
+        Finnhub supplies the live current price and today’s change. Yahoo supplies split-adjusted 2026 history for the average, high, low and yearly range. The board refreshes automatically every five minutes. Verify prices in Fidelity or Robinhood before trading.
       </div>
     </div>
   </details>
@@ -123,11 +123,12 @@ const ORIGINAL=[
 ];
 const $=id=>document.getElementById(id);
 let watch=JSON.parse(localStorage.getItem("steveWatchV2")||"null")||ORIGINAL.map(x=>({symbol:x[0],name:x[1]}));
-let data=JSON.parse(localStorage.getItem("steveDataV2")||"{}");
-let stopped=false, view="all";
+let data=JSON.parse(localStorage.getItem("steveDataV3")||"{}");
+let stopped=false, view="all", refreshing=false, autoTimer=null;
+const AUTO_REFRESH_MS=5*60*1000;
 $("apiKey").value=localStorage.getItem("finnhubKey")||"";
 
-function save(){localStorage.setItem("steveWatchV2",JSON.stringify(watch));localStorage.setItem("steveDataV2",JSON.stringify(data))}
+function save(){localStorage.setItem("steveWatchV2",JSON.stringify(watch));localStorage.setItem("steveDataV3",JSON.stringify(data))}
 function num(v,d=2){return Number.isFinite(v)?v.toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d}):"—"}
 function pct(v){return Number.isFinite(v)?`${v>=0?"+":""}${num(v)}%`:"—"}
 function cls(v){return v>0?"pos":v<0?"neg":"flat"}
@@ -157,7 +158,7 @@ async function fetchJsonWithFallback(urls){
   }
   throw lastError||Error("history unavailable");
 }
-async function getYear(symbol,key){
+async function getYear(symbol){
   const yahooMap={SKYHV:"000660.KS"};
   const y=yahooMap[symbol]||symbol;
   const path=`/v8/finance/chart/${encodeURIComponent(y)}?period1=${yearStartUnix()}&period2=${nowUnix()}&interval=1d&events=history`;
@@ -173,28 +174,37 @@ async function getYear(symbol,key){
   if(!res)throw Error(j?.chart?.error?.description||"no history");
 
   const q=res.indicators?.quote?.[0]||{};
-  const closes=(q.close||[]).filter(Number.isFinite);
-  const highs=(q.high||[]).filter(Number.isFinite);
-  const lows=(q.low||[]).filter(Number.isFinite);
-  if(!closes.length)throw Error("no prices");
+  const adj=res.indicators?.adjclose?.[0]?.adjclose||[];
+  const rawClose=q.close||[], rawHigh=q.high||[], rawLow=q.low||[];
 
-  const price=closes[closes.length-1];
-  const prev=closes.length>1?closes[closes.length-2]:null;
+  const rows=[];
+  for(let i=0;i<rawClose.length;i++){
+    const c=rawClose[i], a=adj[i];
+    if(!Number.isFinite(c))continue;
+    const factor=Number.isFinite(a)&&c!==0?a/c:1;
+    rows.push({
+      close:Number.isFinite(a)?a:c,
+      high:Number.isFinite(rawHigh[i])?rawHigh[i]*factor:(Number.isFinite(a)?a:c),
+      low:Number.isFinite(rawLow[i])?rawLow[i]*factor:(Number.isFinite(a)?a:c)
+    });
+  }
+  if(!rows.length)throw Error("no prices");
+
+  const closes=rows.map(r=>r.close);
+  const highs=rows.map(r=>r.high);
+  const lows=rows.map(r=>r.low);
 
   return {
-    price,
-    dayDollar:Number.isFinite(prev)?price-prev:null,
-    dayPct:Number.isFinite(prev)&&prev!==0?(price/prev-1)*100:null,
-    yearHigh:highs.length?Math.max(...highs):Math.max(...closes),
-    yearLow:lows.length?Math.min(...lows):Math.min(...closes),
+    historyPrice:closes[closes.length-1],
+    yearHigh:Math.max(...highs),
+    yearLow:Math.min(...lows),
     yearAvg:closes.reduce((a,b)=>a+b,0)/closes.length,
     yearFirst:closes[0],
-    yearLast:price,
     yearAt:Date.now()
   };
 }
 function calculated(x){
-  const price=x.price??x.yearLast;
+  const price=Number.isFinite(x.price)?x.price:x.historyPrice;
   const belowHigh=Number.isFinite(price)&&Number.isFinite(x.yearHigh)?(price/x.yearHigh-1)*100:null;
   const aboveLow=Number.isFinite(price)&&Number.isFinite(x.yearLow)?(price/x.yearLow-1)*100:null;
   const ytd=Number.isFinite(price)&&Number.isFinite(x.yearFirst)?(price/x.yearFirst-1)*100:null; const vsAvg=Number.isFinite(price)&&Number.isFinite(x.yearAvg)?(price/x.yearAvg-1)*100:null;
@@ -260,52 +270,74 @@ function render(){
     </article>`).join(""):'<div class="empty">No stocks match this view.</div>';
 }
 async function refresh(){
+  if(refreshing)return;
+  refreshing=true;
   const key=$("apiKey").value.trim();
   stopped=false;$("refresh").disabled=true;
-  let ok=0,fail=0,historyOk=0,historyFail=0,backupOk=0;
-  for(let i=0;i<watch.length;i++){
-    if(stopped)break;
-    const s=watch[i].symbol, old=data[s]||{};
-    $("status").textContent=`Loading ${i+1} of ${watch.length}: ${s}. The first full refresh may take about two minutes.`;
-    const needYear=!old.yearAt||(Date.now()-old.yearAt)>12*60*60*1000;
-    const merged={...old};
-    let loaded=false;
+  let ok=0,fail=0,historyOk=0,historyFail=0,quoteOk=0,quoteFail=0;
 
-    try{
-      if(needYear){
-        const yearly=await getYear(s,key);
-        Object.assign(merged,yearly);
-        historyOk++;
-        loaded=true;
-      }else{
-        loaded=Number.isFinite(merged.price);
+  try{
+    for(let i=0;i<watch.length;i++){
+      if(stopped)break;
+      const s=watch[i].symbol, old=data[s]||{};
+      $("status").textContent=`Loading ${i+1} of ${watch.length}: ${s}.`;
+      const merged={...old};
+      let loaded=false;
+
+      // Finnhub is the live source for current price and today's move.
+      if(key){
+        try{
+          const quote=await getQuote(s,key);
+          Object.assign(merged,quote);
+          quoteOk++;
+          loaded=true;
+        }catch(e){
+          quoteFail++;
+          merged.quoteError=String(e?.message||"quote unavailable");
+        }
       }
-    }catch(e){
-      historyFail++;
-      merged.yearError=String(e?.message||"history unavailable");
-    }
 
-    if(!loaded && key){
-      try{
-        const quote=await getQuote(s,key);
-        Object.assign(merged,quote);
-        backupOk++;
+      // Yahoo supplies the 2026 history. Refresh it once daily or when absent.
+      const needYear=!old.yearAt||(Date.now()-old.yearAt)>24*60*60*1000;
+      if(needYear){
+        try{
+          const yearly=await getYear(s);
+          Object.assign(merged,yearly);
+          historyOk++;
+          if(!loaded && Number.isFinite(yearly.historyPrice)){
+            merged.price=yearly.historyPrice;
+            loaded=true;
+          }
+        }catch(e){
+          historyFail++;
+          merged.yearError=String(e?.message||"history unavailable");
+        }
+      }else if(!loaded && Number.isFinite(merged.historyPrice)){
+        merged.price=merged.historyPrice;
         loaded=true;
-      }catch(e){}
+      }
+
+      data[s]=merged;
+      if(loaded)ok++;else fail++;
+      save();render();
+      await sleep(needYear?1200:350);
     }
 
-    data[s]=merged;
-    if(loaded)ok++;else fail++;
-    save();render();
-    await sleep(needYear?2200:700);
+    $("status").textContent=stopped
+      ?`Stopped. ${ok} stocks loaded.`
+      :`Updated ${new Date().toLocaleTimeString()}. ${ok} loaded; ${fail} unavailable. Live Finnhub quotes: ${quoteOk}${quoteFail?`; quote failures: ${quoteFail}`:""}. Auto-refreshes every 5 minutes.`;
+  } finally {
+    $("refresh").disabled=false;
+    refreshing=false;
   }
-  $("refresh").disabled=false;
-  $("status").textContent=stopped
-    ?`Stopped. ${ok} stocks loaded.`
-    :`Finished: ${ok} stocks loaded; ${fail} unavailable. Historical ranges loaded: ${historyOk}; history failures: ${historyFail}${backupOk?`; backup quotes: ${backupOk}`:""}. Updated ${new Date().toLocaleTimeString()}.`;
 }
 window.removeStock=s=>{watch=watch.filter(x=>x.symbol!==s);delete data[s];save();render()};
 $("refresh").onclick=refresh;$("stop").onclick=()=>stopped=true;
+function startAutoRefresh(){
+  if(autoTimer)clearInterval(autoTimer);
+  autoTimer=setInterval(()=>{if(!document.hidden)refresh()},AUTO_REFRESH_MS);
+}
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)refresh()});
 $("search").oninput=render;$("sort").onchange=render;
 document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{
   document.querySelectorAll(".tabs button").forEach(x=>x.classList.remove("active"));
@@ -326,6 +358,8 @@ $("reset").onclick=()=>{
   if(confirm("Restore the original 50-stock list?")){watch=ORIGINAL.map(x=>({symbol:x[0],name:x[1]}));data={};save();render()}
 };
 render();
+startAutoRefresh();
+setTimeout(refresh,400);
 </script>
 </body>
 </html>
