@@ -2,128 +2,112 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Steve's Stock Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#07090c">
+<title>Steve's Stock Board</title>
 <style>
 :root{
-  --bg:#07090c; --panel:#11151b; --panel2:#171c24; --text:#f4f7fb;
-  --muted:#9aa6b2; --line:#2a313b; --green:#18d65b; --red:#ff5c4d;
-  --accent:#5aa7ff; --yellow:#ffd166;
+  --bg:#07090c;--panel:#11161d;--panel2:#171e27;--text:#f5f7fa;--muted:#9ba8b7;
+  --line:#29323e;--green:#21d765;--red:#ff6257;--blue:#67adff;--gold:#ffd166;
 }
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);font-family:Arial,Helvetica,sans-serif}
-header{position:sticky;top:0;z-index:10;background:rgba(7,9,12,.96);border-bottom:1px solid var(--line);padding:18px 22px}
-h1{font-size:28px;margin:0 0 4px}.sub{color:var(--muted);font-size:14px}
-.wrap{max-width:1500px;margin:auto;padding:20px}
-.controls{display:grid;grid-template-columns:2fr 1fr auto auto;gap:10px;margin:0 0 18px}
-input,select,button{border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:10px;padding:12px 13px;font-size:15px}
-button{cursor:pointer;font-weight:700} button:hover{border-color:var(--accent)}
-.primary{background:#173a63;border-color:#2a6eb2}.danger{color:#ffb3ab}
-.status{min-height:22px;color:var(--muted);margin-bottom:12px}
-.cards{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px}
-.card h2{font-size:20px;margin:0 0 10px}.rank-row{display:grid;grid-template-columns:35px 1fr auto;gap:8px;padding:9px 4px;border-top:1px solid var(--line)}
-.rank-row:first-of-type{border-top:0}.ticker{font-weight:800}.name{color:var(--muted);font-size:13px}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
+header{position:sticky;top:0;z-index:10;padding:14px 14px 12px;background:rgba(7,9,12,.96);border-bottom:1px solid var(--line)}
+h1{margin:0;font-size:25px}.sub{margin-top:3px;color:var(--muted);font-size:13px}
+main{max-width:1100px;margin:auto;padding:12px 12px 42px}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:10px}
+.controls input{grid-column:1/-1}
+input,select,button{width:100%;border:1px solid var(--line);border-radius:11px;background:var(--panel);color:var(--text);padding:12px;font-size:16px}
+button{font-weight:750}.primary{background:#173b63;border-color:#2d73b7}
+.status{color:var(--muted);font-size:13px;line-height:1.4;min-height:36px;margin:6px 2px 11px}
+.tabs{display:flex;gap:7px;overflow-x:auto;padding-bottom:8px;scrollbar-width:none}
+.tabs button{width:auto;white-space:nowrap;padding:10px 12px;font-size:14px}
+.tabs button.active{border-color:var(--blue);background:#142a43}
+.summary{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:4px 0 12px}
+.summary .box{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:12px}
+.summary h2{font-size:15px;margin:0 0 8px}.mini{padding:7px 0;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:8px}
+.mini:first-of-type{border-top:0}.ticker{font-weight:850}.name{color:var(--muted);font-size:12px}
 .pos{color:var(--green)}.neg{color:var(--red)}.flat{color:var(--muted)}
-.toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
-.tablebox{overflow:auto;border:1px solid var(--line);border-radius:14px;background:var(--panel)}
-table{border-collapse:collapse;width:100%;min-width:980px}
-th,td{padding:13px 12px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
-th{position:sticky;top:0;background:var(--panel2);color:#cbd5df;font-size:13px;cursor:pointer}
-th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}
-tr:hover{background:#151a21}.symbol{font-size:17px;font-weight:800}.company{color:var(--muted)}
-.badge{display:inline-block;min-width:82px;padding:7px 9px;border-radius:9px;border:1px solid;text-align:center;font-weight:800}
-.badge.pos{border-color:var(--green)}.badge.neg{border-color:var(--red)}
-.small{font-size:12px;color:var(--muted)}
-.settings{margin-top:18px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}
-.settings summary{cursor:pointer;font-weight:800;font-size:18px}
-.settings-grid{display:grid;grid-template-columns:2fr auto;gap:10px;margin-top:14px}
-.note{color:var(--muted);font-size:13px;line-height:1.45}
-footer{color:var(--muted);font-size:12px;padding:22px 0 45px}
-@media(max-width:800px){
-  .controls{grid-template-columns:1fr 1fr}.controls input{grid-column:1/-1}
-  .cards{grid-template-columns:1fr}.wrap{padding:12px}header{padding:14px}
+.list{display:grid;gap:9px}
+.stock{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:13px}
+.stock-top{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:start}
+.stock a{color:var(--text);text-decoration:none}.symbol{font-size:20px;font-weight:900}.company{font-size:13px;color:var(--muted);margin-top:2px}
+.price{text-align:right;font-size:19px;font-weight:850}.day{text-align:right;font-size:15px;font-weight:800;margin-top:2px}
+.metrics{display:grid;grid-template-columns:repeat(2,1fr);gap:7px;margin-top:12px}
+.metric{background:var(--panel2);border-radius:10px;padding:9px 7px;text-align:center}
+.metric .label{font-size:11px;color:var(--muted);line-height:1.15}.metric .value{font-size:15px;font-weight:850;margin-top:5px}
+.rangebar{height:8px;background:#28313c;border-radius:99px;margin-top:12px;overflow:hidden}
+.rangefill{height:100%;background:linear-gradient(90deg,var(--red),var(--gold),var(--green));border-radius:99px}
+.bottom{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:9px}
+.tag{font-size:12px;border:1px solid var(--line);border-radius:99px;padding:5px 8px;color:#d8e0e9}
+.remove{width:auto;padding:6px 9px;font-size:12px;color:#ffb4ae}
+.tools{display:flex;gap:8px;flex-wrap:wrap;margin:13px 0}
+.tools input{flex:1;min-width:170px}.tools button{width:auto}
+details{margin-top:16px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:13px}
+summary{font-weight:850;cursor:pointer}.settings{display:grid;gap:9px;margin-top:12px}.note{color:var(--muted);font-size:12px;line-height:1.45}
+.empty{text-align:center;color:var(--muted);padding:28px}
+@media(min-width:760px){
+  .controls{grid-template-columns:2fr 1fr auto auto}.controls input{grid-column:auto}
+  .list{grid-template-columns:1fr 1fr}.summary{grid-template-columns:1fr 1fr}
 }
 </style>
 </head>
 <body>
 <header>
-  <h1>Steve's Stock Dashboard</h1>
-  <div class="sub">Free-data watchlist • automatic top gainers and biggest losers</div>
+  <h1>Steve's Stock Board</h1>
+  <div class="sub">Today’s movement • 2026 average • high, low and current range position</div>
 </header>
-
-<div class="wrap">
+<main>
   <div class="controls">
     <input id="search" placeholder="Search ticker or company">
     <select id="sort">
-      <option value="changeDesc">Highest gain first</option>
-      <option value="changeAsc">Biggest loss first</option>
+      <option value="dayDesc">Biggest gainers today</option>
+      <option value="dayAsc">Biggest losers today</option>
+      <option value="dipDesc">Deepest below 2026 high</option>
+      <option value="belowAvg">Furthest below 2026 average</option><option value="nearLow">Closest to 2026 low</option>
+      <option value="ytdDesc">Best 2026 gain</option>
+      <option value="ytdAsc">Worst 2026 result</option>
       <option value="symbol">Alphabetical</option>
-      <option value="priceDesc">Highest price</option>
     </select>
-    <button class="primary" id="refreshBtn">Refresh quotes</button>
-    <button id="stopBtn">Stop</button>
+    <button id="refresh" class="primary">Refresh</button>
+    <button id="stop">Stop</button>
+  </div>
+  <div id="status" class="status">Open Settings once, add a free Finnhub API key, and press Refresh.</div>
+
+  <div class="tabs">
+    <button class="active" data-view="all">All stocks</button>
+    <button data-view="gainers">Gainers</button>
+    <button data-view="losers">Losers</button>
+    <button data-view="dips">Deepest dips</button><button data-view="belowAvg">Below average</button>
+    <button data-view="nearHigh">Near highs</button>
   </div>
 
-  <div id="status" class="status">Enter a free Finnhub API key in Settings, then press Refresh quotes.</div>
-
-  <section class="cards">
-    <div class="card">
-      <h2>🚀 Top Gainers Today</h2>
-      <div id="gainers"><div class="small">Waiting for quote data…</div></div>
-    </div>
-    <div class="card">
-      <h2>📉 Biggest Losers Today</h2>
-      <div id="losers"><div class="small">Waiting for quote data…</div></div>
-    </div>
+  <section class="summary">
+    <div class="box"><h2>Top gainers today</h2><div id="gainers"></div></div>
+    <div class="box"><h2>Biggest losers today</h2><div id="losers"></div></div>
   </section>
 
-  <div class="toolbar">
-    <input id="newTicker" placeholder="Add ticker, e.g. ANET" style="width:210px">
-    <button id="addBtn">Add ticker</button>
-    <button id="exportBtn">Export watchlist</button>
-    <button id="resetBtn" class="danger">Reset original list</button>
+  <div id="list" class="list"></div>
+
+  <div class="tools">
+    <input id="newTicker" placeholder="Add ticker, for example AMZN">
+    <button id="add">Add stock</button>
+    <button id="reset">Restore original 50</button>
   </div>
 
-  <div class="tablebox">
-    <table>
-      <thead>
-        <tr>
-          <th data-sort="symbol">Ticker</th>
-          <th data-sort="name">Company</th>
-          <th data-sort="price">Price</th>
-          <th data-sort="change">Day %</th>
-          <th data-sort="dollarChange">Day $</th>
-          <th data-sort="high">Day High</th>
-          <th data-sort="low">Day Low</th>
-          <th data-sort="prevClose">Previous Close</th>
-          <th>Remove</th>
-        </tr>
-      </thead>
-      <tbody id="tbody"></tbody>
-    </table>
-  </div>
-
-  <details class="settings" open>
-    <summary>Settings — free market-data connection</summary>
-    <div class="settings-grid">
-      <input id="apiKey" type="password" placeholder="Paste your free Finnhub API key">
-      <button id="saveKeyBtn">Save key on this device</button>
+  <details>
+    <summary>Settings — free market data</summary>
+    <div class="settings">
+      <input id="apiKey" type="password" placeholder="Paste free Finnhub API key">
+      <button id="saveKey">Save key on this device</button>
+      <div class="note">
+        The key stays in this browser. The first full refresh retrieves current quotes and 2026 daily history for 50 stocks. Later refreshes reuse the yearly data for 12 hours and are faster. Free feeds can be delayed or unavailable for some foreign or OTC symbols. Verify prices in Fidelity or Robinhood before trading.
+      </div>
     </div>
-    <p class="note">
-      The key stays in this browser's local storage. It is not sent anywhere except Finnhub when retrieving quotes.
-      The dashboard spaces requests out to stay within the free-plan limit. With a large watchlist, a full refresh can take about one minute.
-      Quotes and availability are controlled by the free data provider and may be delayed or incomplete.
-    </p>
   </details>
-
-  <footer>
-    Personal research dashboard only. Verify important prices and account information in Fidelity or Robinhood before trading.
-  </footer>
-</div>
-
+</main>
 <script>
-const ORIGINAL = [
+const ORIGINAL=[
 ["VTI","Vanguard Total Stock Market ETF"],["TSM","Taiwan Semiconductor"],["QQQM","Invesco NASDAQ 100 ETF"],
 ["META","Meta Platforms"],["MU","Micron Technology"],["TEL","TE Connectivity"],["NVDA","NVIDIA"],
 ["AVGO","Broadcom"],["GEV","GE Vernova"],["APH","Amphenol"],["NVT","nVent Electric"],["AMAT","Applied Materials"],
@@ -135,120 +119,160 @@ const ORIGINAL = [
 ["CAT","Caterpillar"],["EQT","EQT"],["HWM","Howmet Aerospace"],["ET","Energy Transfer"],
 ["ONTO","Onto Innovation"],["SKYHV","SK hynix ADR"],["RKLB","Rocket Lab"],["ETN","Eaton"],
 ["SNDK","SanDisk"],["HPE","Hewlett Packard Enterprise"],["IONQ","IonQ"],["ZTS","Zoetis"],
-["WDC","Western Digital"],["DELL","Dell Technologies"],["CSCO","Cisco Systems"],["DUK","Duke Energy"]
+["WDC","Western Digital"],["DELL","Dell Technologies"],["CSCO","Cisco Systems"],["DUK","Duke Energy"],["ANET","Arista Networks"]
 ];
+const $=id=>document.getElementById(id);
+let watch=JSON.parse(localStorage.getItem("steveWatchV2")||"null")||ORIGINAL.map(x=>({symbol:x[0],name:x[1]}));
+let data=JSON.parse(localStorage.getItem("steveDataV2")||"{}");
+let stopped=false, view="all";
+$("apiKey").value=localStorage.getItem("finnhubKey")||"";
 
-let watchlist = JSON.parse(localStorage.getItem("steveWatchlist") || "null") || ORIGINAL.map(x=>({symbol:x[0],name:x[1]}));
-let quotes = {};
-let stopped = false;
-let sortMode = "changeDesc";
+function save(){localStorage.setItem("steveWatchV2",JSON.stringify(watch));localStorage.setItem("steveDataV2",JSON.stringify(data))}
+function num(v,d=2){return Number.isFinite(v)?v.toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d}):"—"}
+function pct(v){return Number.isFinite(v)?`${v>=0?"+":""}${num(v)}%`:"—"}
+function cls(v){return v>0?"pos":v<0?"neg":"flat"}
+function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
+function yearStartUnix(){return Math.floor(new Date(new Date().getFullYear(),0,1).getTime()/1000)}
+function nowUnix(){return Math.floor(Date.now()/1000)}
 
-const $ = id => document.getElementById(id);
-$("apiKey").value = localStorage.getItem("finnhubKey") || "";
-
-function saveList(){ localStorage.setItem("steveWatchlist", JSON.stringify(watchlist)); }
-function fmt(v,d=2){ return Number.isFinite(v) ? v.toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d}) : "—"; }
-function cls(v){ return v>0?"pos":v<0?"neg":"flat"; }
-
-function rows(){
-  const query=$("search").value.trim().toLowerCase();
-  let data=watchlist.map(w=>({...w,...(quotes[w.symbol]||{})}));
-  if(query) data=data.filter(x=>x.symbol.toLowerCase().includes(query)||x.name.toLowerCase().includes(query));
-  const sorters={
-    changeDesc:(a,b)=>(b.change??-Infinity)-(a.change??-Infinity),
-    changeAsc:(a,b)=>(a.change??Infinity)-(b.change??Infinity),
-    symbol:(a,b)=>a.symbol.localeCompare(b.symbol),
-    priceDesc:(a,b)=>(b.price??-Infinity)-(a.price??-Infinity),
-    name:(a,b)=>a.name.localeCompare(b.name),
-    price:(a,b)=>(b.price??-Infinity)-(a.price??-Infinity),
-    change:(a,b)=>(b.change??-Infinity)-(a.change??-Infinity),
-    dollarChange:(a,b)=>(b.dollarChange??-Infinity)-(a.dollarChange??-Infinity),
-    high:(a,b)=>(b.high??-Infinity)-(a.high??-Infinity),
-    low:(a,b)=>(b.low??-Infinity)-(a.low??-Infinity),
-    prevClose:(a,b)=>(b.prevClose??-Infinity)-(a.prevClose??-Infinity)
-  };
-  data.sort(sorters[sortMode]||sorters.changeDesc);
-  return data;
-}
-
-function render(){
-  $("tbody").innerHTML=rows().map(x=>`
-    <tr>
-      <td class="symbol">${x.symbol}</td>
-      <td class="company">${x.name}</td>
-      <td>$${fmt(x.price)}</td>
-      <td><span class="badge ${cls(x.change)}">${Number.isFinite(x.change)?(x.change>=0?"+":"")+fmt(x.change)+"%":"—"}</span></td>
-      <td class="${cls(x.dollarChange)}">${Number.isFinite(x.dollarChange)?(x.dollarChange>=0?"+$":"-$")+fmt(Math.abs(x.dollarChange)):"—"}</td>
-      <td>$${fmt(x.high)}</td>
-      <td>$${fmt(x.low)}</td>
-      <td>$${fmt(x.prevClose)}</td>
-      <td><button onclick="removeTicker('${x.symbol}')">Remove</button></td>
-    </tr>`).join("");
-
-  const available=watchlist.map(w=>({...w,...(quotes[w.symbol]||{})})).filter(x=>Number.isFinite(x.change));
-  const gainers=[...available].sort((a,b)=>b.change-a.change).slice(0,5);
-  const losers=[...available].sort((a,b)=>a.change-b.change).slice(0,5);
-  $("gainers").innerHTML=rankHTML(gainers);
-  $("losers").innerHTML=rankHTML(losers);
-}
-function rankHTML(items){
-  if(!items.length) return '<div class="small">Waiting for quote data…</div>';
-  return items.map((x,i)=>`<div class="rank-row"><div>${i+1}</div><div><div class="ticker">${x.symbol}</div><div class="name">${x.name}</div></div><div class="${cls(x.change)}"><b>${x.change>=0?"+":""}${fmt(x.change)}%</b></div></div>`).join("");
-}
-
-async function fetchQuote(symbol,key){
-  const url=`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${encodeURIComponent(key)}`;
-  const r=await fetch(url);
-  if(!r.ok) throw new Error(`HTTP ${r.status}`);
+async function getQuote(symbol,key){
+  const r=await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${encodeURIComponent(key)}`);
+  if(!r.ok)throw Error("quote");
   const q=await r.json();
-  if(!q || !q.c) throw new Error("No quote");
-  return {price:q.c, dollarChange:q.d, change:q.dp, high:q.h, low:q.l, prevClose:q.pc, timestamp:q.t};
+  if(!q||!q.c)throw Error("no quote");
+  return {price:q.c,dayDollar:q.d,dayPct:q.dp,dayHigh:q.h,dayLow:q.l,prev:q.pc,quoteAt:Date.now()};
 }
-const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-
-async function refreshAll(){
+async function getYear(symbol,key){
+  const yahooMap={SKYHV:"000660.KS"};
+  const y=yahooMap[symbol]||symbol;
+  const r=await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(y)}?period1=${yearStartUnix()}&period2=${nowUnix()}&interval=1d&events=history`);
+  if(!r.ok)throw Error("history");
+  const j=await r.json(), res=j?.chart?.result?.[0];
+  if(!res)throw Error("no history");
+  const q=res.indicators?.quote?.[0]||{};
+  const adj=res.indicators?.adjclose?.[0]?.adjclose||q.close||[];
+  const closes=adj.filter(Number.isFinite), highs=(q.high||[]).filter(Number.isFinite), lows=(q.low||[]).filter(Number.isFinite);
+  if(!closes.length)throw Error("no prices");
+  const meta=res.meta||{};
+  const price=Number.isFinite(meta.regularMarketPrice)?meta.regularMarketPrice:closes[closes.length-1];
+  const prev=Number.isFinite(meta.chartPreviousClose)?meta.chartPreviousClose:(closes.length>1?closes[closes.length-2]:null);
+  return {price,dayPct:Number.isFinite(prev)?(price/prev-1)*100:null,
+    yearHigh:highs.length?Math.max(...highs):Math.max(...closes),
+    yearLow:lows.length?Math.min(...lows):Math.min(...closes),
+    yearAvg:closes.reduce((a,b)=>a+b,0)/closes.length,
+    yearFirst:closes[0],yearLast:closes[closes.length-1],yearAt:Date.now()};
+}
+function calculated(x){
+  const price=x.price??x.yearLast;
+  const belowHigh=Number.isFinite(price)&&Number.isFinite(x.yearHigh)?(price/x.yearHigh-1)*100:null;
+  const aboveLow=Number.isFinite(price)&&Number.isFinite(x.yearLow)?(price/x.yearLow-1)*100:null;
+  const ytd=Number.isFinite(price)&&Number.isFinite(x.yearFirst)?(price/x.yearFirst-1)*100:null; const vsAvg=Number.isFinite(price)&&Number.isFinite(x.yearAvg)?(price/x.yearAvg-1)*100:null;
+  const range=Number.isFinite(price)&&Number.isFinite(x.yearHigh)&&Number.isFinite(x.yearLow)&&x.yearHigh>x.yearLow
+    ?Math.max(0,Math.min(100,(price-x.yearLow)/(x.yearHigh-x.yearLow)*100)):null;
+  return {...x,price,belowHigh,aboveLow,ytd,vsAvg,range};
+}
+function label(x){
+  if(!Number.isFinite(x.belowHigh))return "Year range unavailable";
+  const d=Math.abs(x.belowHigh);
+  if(d<=3)return "Near 2026 high";
+  if(d<=10)return "Small pullback";
+  if(d<=20)return "Moderate pullback";
+  return "Deep pullback";
+}
+function allRows(){
+  const q=$("search").value.trim().toLowerCase();
+  let a=watch.map(w=>calculated({...w,...(data[w.symbol]||{})}));
+  if(q)a=a.filter(x=>x.symbol.toLowerCase().includes(q)||x.name.toLowerCase().includes(q));
+  if(view==="gainers")a=a.filter(x=>x.dayPct>0);
+  if(view==="losers")a=a.filter(x=>x.dayPct<0);
+  if(view==="dips")a=a.filter(x=>Number.isFinite(x.belowHigh)); if(view==="belowAvg")a=a.filter(x=>Number.isFinite(x.vsAvg)&&x.vsAvg<0);
+  if(view==="nearHigh")a=a.filter(x=>Number.isFinite(x.belowHigh)&&x.belowHigh>=-5);
+  const mode=$("sort").value;
+  const sorter={
+    dayDesc:(a,b)=>(b.dayPct??-9999)-(a.dayPct??-9999),
+    dayAsc:(a,b)=>(a.dayPct??9999)-(b.dayPct??9999),
+    dipDesc:(a,b)=>(a.belowHigh??9999)-(b.belowHigh??9999),
+    belowAvg:(a,b)=>(a.vsAvg??9999)-(b.vsAvg??9999), nearLow:(a,b)=>(a.aboveLow??9999)-(b.aboveLow??9999),
+    ytdDesc:(a,b)=>(b.ytd??-9999)-(a.ytd??-9999),
+    ytdAsc:(a,b)=>(a.ytd??9999)-(b.ytd??9999),
+    symbol:(a,b)=>a.symbol.localeCompare(b.symbol)
+  }[mode];
+  return a.sort(sorter);
+}
+function mini(items){
+  if(!items.length)return '<div class="name">Waiting for data…</div>';
+  return items.slice(0,5).map(x=>`<div class="mini"><div><span class="ticker">${x.symbol}</span><div class="name">${x.name}</div></div><b class="${cls(x.dayPct)}">${pct(x.dayPct)}</b></div>`).join("");
+}
+function render(){
+  const all=watch.map(w=>calculated({...w,...(data[w.symbol]||{})})).filter(x=>Number.isFinite(x.dayPct));
+  $("gainers").innerHTML=mini([...all].sort((a,b)=>b.dayPct-a.dayPct));
+  $("losers").innerHTML=mini([...all].sort((a,b)=>a.dayPct-b.dayPct));
+  const rows=allRows();
+  $("list").innerHTML=rows.length?rows.map(x=>`
+    <article class="stock">
+      <div class="stock-top">
+        <div><a href="https://finance.yahoo.com/quote/${encodeURIComponent(x.symbol)}" target="_blank"><div class="symbol">${x.symbol}</div><div class="company">${x.name}</div></a></div>
+        <div><div class="price">${Number.isFinite(x.price)?"$"+num(x.price):"—"}</div><div class="day ${cls(x.dayPct)}">${pct(x.dayPct)}</div></div>
+      </div>
+      <div class="metrics">
+        <div class="metric"><div class="label">2026 average close</div><div class="value">${Number.isFinite(x.yearAvg)?"$"+num(x.yearAvg):"—"}</div></div>
+        <div class="metric"><div class="label">Vs. 2026 average</div><div class="value ${cls(x.vsAvg)}">${pct(x.vsAvg)}</div></div>
+        <div class="metric"><div class="label">2026 high</div><div class="value">${Number.isFinite(x.yearHigh)?"$"+num(x.yearHigh):"—"}</div></div>
+        <div class="metric"><div class="label">Below high</div><div class="value neg">${Number.isFinite(x.belowHigh)?num(Math.abs(x.belowHigh))+"%":"—"}</div></div>
+        <div class="metric"><div class="label">2026 low</div><div class="value">${Number.isFinite(x.yearLow)?"$"+num(x.yearLow):"—"}</div></div>
+        <div class="metric"><div class="label">Above low</div><div class="value">${Number.isFinite(x.aboveLow)?num(x.aboveLow)+"%":"—"}</div></div>
+        <div class="metric"><div class="label">2026 gain/loss</div><div class="value ${cls(x.ytd)}">${pct(x.ytd)}</div></div>
+        <div class="metric"><div class="label">Year range position</div><div class="value">${Number.isFinite(x.range)?num(x.range,0)+"%":"—"}</div></div>
+      </div>
+      <div class="rangebar" title="Position inside 2026 high-low range"><div class="rangefill" style="width:${Number.isFinite(x.range)?x.range:0}%"></div></div>
+      <div class="bottom"><span class="tag">${label(x)}${Number.isFinite(x.range)?" • "+num(x.range,0)+"% up the yearly range":""}</span><button class="remove" onclick="removeStock('${x.symbol}')">Remove</button></div>
+    </article>`).join(""):'<div class="empty">No stocks match this view.</div>';
+}
+async function refresh(){
   const key=$("apiKey").value.trim();
-  if(!key){ $("status").textContent="Please enter and save a free Finnhub API key first."; return; }
-  stopped=false;
-  $("refreshBtn").disabled=true;
-  let ok=0, failed=0;
-  for(let i=0;i<watchlist.length;i++){
-    if(stopped) break;
-    const s=watchlist[i].symbol;
-    $("status").textContent=`Loading ${i+1} of ${watchlist.length}: ${s}…`;
-    try{ quotes[s]=await fetchQuote(s,key); ok++; }
-    catch(e){ failed++; console.warn(s,e); }
-    render();
-    if(i<watchlist.length-1) await sleep(1100);
+  if(!key){$("status").textContent="Open Settings and enter a free Finnhub API key first.";return}
+  stopped=false;$("refresh").disabled=true;
+  let ok=0,fail=0;
+  for(let i=0;i<watch.length;i++){
+    if(stopped)break;
+    const s=watch[i].symbol, old=data[s]||{};
+    $("status").textContent=`Loading ${i+1} of ${watch.length}: ${s}. The first full refresh may take about two minutes.`;
+    const needYear=!old.yearAt||(Date.now()-old.yearAt)>12*60*60*1000;
+    try{
+      const results=await Promise.allSettled([getQuote(s,key),needYear?getYear(s,key):Promise.resolve({})]);
+      const merged={...old};
+      if(results[0].status==="fulfilled")Object.assign(merged,results[0].value);
+      if(results[1].status==="fulfilled")Object.assign(merged,results[1].value);
+      data[s]=merged;
+      if(results[0].status==="fulfilled")ok++;else fail++;
+    }catch(e){fail++}
+    save();render();
+    await sleep(needYear?2200:1050);
   }
-  $("refreshBtn").disabled=false;
-  $("status").textContent=stopped ? `Refresh stopped. Loaded ${ok}; unavailable ${failed}.`
-    : `Refresh complete: ${ok} loaded, ${failed} unavailable. Last refresh ${new Date().toLocaleTimeString()}.`;
+  $("refresh").disabled=false;
+  $("status").textContent=stopped?`Stopped. ${ok} quotes loaded.`:`Finished: ${ok} quotes loaded; ${fail} unavailable. Updated ${new Date().toLocaleTimeString()}.`;
 }
-function removeTicker(s){ watchlist=watchlist.filter(x=>x.symbol!==s); delete quotes[s]; saveList(); render(); }
-window.removeTicker=removeTicker;
-
-$("saveKeyBtn").onclick=()=>{ localStorage.setItem("finnhubKey",$("apiKey").value.trim()); $("status").textContent="API key saved on this device."; };
-$("refreshBtn").onclick=refreshAll;
-$("stopBtn").onclick=()=>{stopped=true};
-$("search").oninput=render;
-$("sort").onchange=e=>{sortMode=e.target.value;render()};
-$("addBtn").onclick=()=>{
-  const s=$("newTicker").value.trim().toUpperCase();
-  if(!s)return;
-  if(!watchlist.some(x=>x.symbol===s)){watchlist.push({symbol:s,name:s});saveList();}
-  $("newTicker").value="";render();
+window.removeStock=s=>{watch=watch.filter(x=>x.symbol!==s);delete data[s];save();render()};
+$("refresh").onclick=refresh;$("stop").onclick=()=>stopped=true;
+$("search").oninput=render;$("sort").onchange=render;
+document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll(".tabs button").forEach(x=>x.classList.remove("active"));
+  b.classList.add("active");view=b.dataset.view;
+  if(view==="dips")$("sort").value="dipDesc";
+  if(view==="belowAvg")$("sort").value="belowAvg"; if(view==="nearHigh")$("sort").value="dipDesc";
+  if(view==="gainers")$("sort").value="dayDesc";
+  if(view==="losers")$("sort").value="dayAsc";
+  render();
+});
+$("saveKey").onclick=()=>{localStorage.setItem("finnhubKey",$("apiKey").value.trim());$("status").textContent="API key saved on this device."};
+$("add").onclick=()=>{
+  const s=$("newTicker").value.trim().toUpperCase().replace(/\s/g,"");
+  if(s&&!watch.some(x=>x.symbol===s)){watch.push({symbol:s,name:s});save();render()}
+  $("newTicker").value="";
 };
-$("resetBtn").onclick=()=>{
-  if(confirm("Restore the original watchlist from your screenshots?")){
-    watchlist=ORIGINAL.map(x=>({symbol:x[0],name:x[1]}));quotes={};saveList();render();
-  }
+$("reset").onclick=()=>{
+  if(confirm("Restore the original 49-stock list?")){watch=ORIGINAL.map(x=>({symbol:x[0],name:x[1]}));data={};save();render()}
 };
-$("exportBtn").onclick=()=>{
-  const blob=new Blob([JSON.stringify(watchlist,null,2)],{type:"application/json"});
-  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="stock-watchlist.json";a.click();URL.revokeObjectURL(a.href);
-};
-document.querySelectorAll("th[data-sort]").forEach(th=>th.onclick=()=>{sortMode=th.dataset.sort;render();});
 render();
 </script>
 </body>
