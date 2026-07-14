@@ -46,6 +46,12 @@ button{font-weight:750}.primary{background:#173b63;border-color:#2d73b7}
 details{margin-top:16px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:13px}
 summary{font-weight:850;cursor:pointer}.settings{display:grid;gap:9px;margin-top:12px}.note{color:var(--muted);font-size:12px;line-height:1.45}
 .empty{text-align:center;color:var(--muted);padding:28px}
+.headerline{display:flex;justify-content:space-between;gap:10px;align-items:center}.marketbadge{font-size:12px;font-weight:850;border:1px solid var(--line);border-radius:99px;padding:6px 9px;white-space:nowrap}.marketbadge.open{color:var(--green)}.marketbadge.extended{color:var(--gold)}
+.stock.alert-low{border-color:var(--gold);box-shadow:0 0 0 1px rgba(255,209,102,.25)}.stock.alert-high{border-color:var(--green);box-shadow:0 0 0 1px rgba(33,215,101,.25)}
+.extended{font-size:12px;color:var(--gold);text-align:right;margin-top:3px}.actions{display:flex;gap:7px}.actions button{width:auto;padding:7px 9px;font-size:12px}.chartbtn{color:var(--blue)}.alertbtn{color:var(--gold)}
+.alerttext{font-size:11px;color:var(--muted);margin-top:5px}.alert-hit{color:var(--gold);font-weight:800}
+.chartpanel{display:none;margin-top:11px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px}.chartpanel.open{display:block}.charthead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}.charttitle{font-size:13px;font-weight:850}.charttabs{display:flex;gap:5px}.charttabs button{width:auto;padding:6px 8px;font-size:11px}.charttabs button.active{border-color:var(--blue);background:#142a43}.chartwrap{height:180px;position:relative}.chartwrap canvas{width:100%;height:100%}.chartnote{font-size:11px;color:var(--muted);margin-top:5px}
+
 @media(min-width:760px){
   .controls{grid-template-columns:2fr 1fr auto auto}.controls input{grid-column:auto}
   .list{grid-template-columns:1fr 1fr}.summary{grid-template-columns:1fr 1fr}
@@ -54,8 +60,8 @@ summary{font-weight:850;cursor:pointer}.settings{display:grid;gap:9px;margin-top
 </head>
 <body>
 <header>
-  <h1>Steve's Stock Board</h1>
-  <div class="sub">Today’s movement • 2026 average • high, low and current range position</div>
+  <div class="headerline"><h1>Steve's Stock Board</h1><span id="marketBadge" class="marketbadge">Checking market…</span></div>
+  <div class="sub">Automatically ranked from biggest gainer to biggest loser • charts • visual price alerts</div>
 </header>
 <main>
   <div class="controls">
@@ -79,7 +85,7 @@ summary{font-weight:850;cursor:pointer}.settings{display:grid;gap:9px;margin-top
     <button data-view="gainers">Gainers</button>
     <button data-view="losers">Losers</button>
     <button data-view="dips">Deepest dips</button><button data-view="belowAvg">Below average</button>
-    <button data-view="nearHigh">Near highs</button>
+    <button data-view="nearHigh">Near highs</button><button data-view="alerts">Alerts</button>
   </div>
 
   <section class="summary">
@@ -101,7 +107,7 @@ summary{font-weight:850;cursor:pointer}.settings{display:grid;gap:9px;margin-top
       <input id="apiKey" type="password" placeholder="Finnhub API key for live quotes">
       <button id="saveKey">Save key on this device</button>
       <div class="note">
-        Finnhub supplies the live current price and today’s change. Yahoo supplies split-adjusted 2026 history for the average, high, low and yearly range. The board refreshes automatically every five minutes. Verify prices in Fidelity or Robinhood before trading.
+        Finnhub supplies current quotes and today’s change. Yahoo supplies split-adjusted history, charts and premarket/after-hours prices where available. Visual alerts appear only while viewing this dashboard; they do not send phone notifications. Verify prices in Fidelity or Robinhood before trading.
       </div>
     </div>
   </details>
@@ -123,18 +129,34 @@ const ORIGINAL=[
 ];
 const $=id=>document.getElementById(id);
 let watch=JSON.parse(localStorage.getItem("steveWatchV2")||"null")||ORIGINAL.map(x=>({symbol:x[0],name:x[1]}));
-let data=JSON.parse(localStorage.getItem("steveDataV3")||"{}");
+let data=JSON.parse(localStorage.getItem("steveDataV4")||"{}");
+let alerts=JSON.parse(localStorage.getItem("steveAlertsV1")||"{}");
+let chartCache={};
 let stopped=false, view="all", refreshing=false, autoTimer=null;
 const AUTO_REFRESH_MS=5*60*1000;
 $("apiKey").value=localStorage.getItem("finnhubKey")||"";
+$("sort").value="dayDesc";
 
-function save(){localStorage.setItem("steveWatchV2",JSON.stringify(watch));localStorage.setItem("steveDataV3",JSON.stringify(data))}
+function save(){localStorage.setItem("steveWatchV2",JSON.stringify(watch));localStorage.setItem("steveDataV4",JSON.stringify(data));localStorage.setItem("steveAlertsV1",JSON.stringify(alerts))}
 function num(v,d=2){return Number.isFinite(v)?v.toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d}):"—"}
 function pct(v){return Number.isFinite(v)?`${v>=0?"+":""}${num(v)}%`:"—"}
 function cls(v){return v>0?"pos":v<0?"neg":"flat"}
 function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
 function yearStartUnix(){return Math.floor(new Date(new Date().getFullYear(),0,1).getTime()/1000)}
 function nowUnix(){return Math.floor(Date.now()/1000)}
+function marketSession(){
+  const parts=new Intl.DateTimeFormat("en-US",{timeZone:"America/New_York",weekday:"short",hour:"2-digit",minute:"2-digit",hour12:false}).formatToParts(new Date());
+  const get=t=>parts.find(p=>p.type===t)?.value; const day=get("weekday"), mins=Number(get("hour"))*60+Number(get("minute"));
+  if(["Sat","Sun"].includes(day))return {key:"closed",label:"Market closed"};
+  if(mins>=240&&mins<570)return {key:"premarket",label:"Premarket"};
+  if(mins>=570&&mins<960)return {key:"open",label:"Market open"};
+  if(mins>=960&&mins<1200)return {key:"afterhours",label:"After hours"};
+  return {key:"closed",label:"Market closed"};
+}
+function updateMarketBadge(){const m=marketSession(),b=$("marketBadge");b.textContent=m.label;b.className="marketbadge "+(m.key==="open"?"open":(["premarket","afterhours"].includes(m.key)?"extended":""));}
+function yahooSymbol(symbol){return ({SKYHV:"000660.KS"})[symbol]||symbol}
+function yahooUrls(path){const d1=`https://query1.finance.yahoo.com${path}`,d2=`https://query2.finance.yahoo.com${path}`;return [d1,d2,`https://corsproxy.io/?url=${encodeURIComponent(d1)}`,`https://api.allorigins.win/raw?url=${encodeURIComponent(d1)}`]}
+
 
 async function getQuote(symbol,key){
   const r=await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${encodeURIComponent(key)}`);
@@ -159,17 +181,9 @@ async function fetchJsonWithFallback(urls){
   throw lastError||Error("history unavailable");
 }
 async function getYear(symbol){
-  const yahooMap={SKYHV:"000660.KS"};
-  const y=yahooMap[symbol]||symbol;
+  const y=yahooSymbol(symbol);
   const path=`/v8/finance/chart/${encodeURIComponent(y)}?period1=${yearStartUnix()}&period2=${nowUnix()}&interval=1d&events=history`;
-  const direct1=`https://query1.finance.yahoo.com${path}`;
-  const direct2=`https://query2.finance.yahoo.com${path}`;
-  const urls=[
-    direct1,
-    direct2,
-    `https://corsproxy.io/?url=${encodeURIComponent(direct1)}`,
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(direct1)}`
-  ];
+  const urls=yahooUrls(path);
   const j=await fetchJsonWithFallback(urls), res=j?.chart?.result?.[0];
   if(!res)throw Error(j?.chart?.error?.description||"no history");
 
@@ -203,6 +217,23 @@ async function getYear(symbol){
     yearAt:Date.now()
   };
 }
+async function getExtended(symbol){
+  const y=yahooSymbol(symbol), path=`/v8/finance/chart/${encodeURIComponent(y)}?range=1d&interval=5m&includePrePost=true&events=history`;
+  const j=await fetchJsonWithFallback(yahooUrls(path)),res=j?.chart?.result?.[0]; if(!res)throw Error("no extended quote");
+  const meta=res.meta||{}, ts=res.timestamp||[], closes=res.indicators?.quote?.[0]?.close||[];
+  let last=null; for(let i=closes.length-1;i>=0;i--){if(Number.isFinite(closes[i])){last=closes[i];break}}
+  const session=marketSession().key, regular=meta.regularMarketPrice;
+  const ext=session==="premarket"?(meta.preMarketPrice??last):session==="afterhours"?(meta.postMarketPrice??last):null;
+  return {extendedPrice:Number.isFinite(ext)?ext:null,regularPrice:Number.isFinite(regular)?regular:null,extendedSession:session,extendedAt:Date.now()};
+}
+async function getChart(symbol,range="3mo"){
+  const y=yahooSymbol(symbol); const interval=range==="1d"?"5m":"1d";
+  const path=`/v8/finance/chart/${encodeURIComponent(y)}?range=${range}&interval=${interval}&includePrePost=${range==="1d"?"true":"false"}&events=history`;
+  const j=await fetchJsonWithFallback(yahooUrls(path)),res=j?.chart?.result?.[0]; if(!res)throw Error("chart unavailable");
+  const ts=res.timestamp||[],close=res.indicators?.adjclose?.[0]?.adjclose||res.indicators?.quote?.[0]?.close||[];
+  const points=[]; for(let i=0;i<ts.length;i++)if(Number.isFinite(close[i]))points.push({t:ts[i]*1000,v:close[i]});
+  if(points.length<2)throw Error("not enough chart data"); return points;
+}
 function calculated(x){
   const price=Number.isFinite(x.price)?x.price:x.historyPrice;
   const belowHigh=Number.isFinite(price)&&Number.isFinite(x.yearHigh)?(price/x.yearHigh-1)*100:null;
@@ -210,7 +241,8 @@ function calculated(x){
   const ytd=Number.isFinite(price)&&Number.isFinite(x.yearFirst)?(price/x.yearFirst-1)*100:null; const vsAvg=Number.isFinite(price)&&Number.isFinite(x.yearAvg)?(price/x.yearAvg-1)*100:null;
   const range=Number.isFinite(price)&&Number.isFinite(x.yearHigh)&&Number.isFinite(x.yearLow)&&x.yearHigh>x.yearLow
     ?Math.max(0,Math.min(100,(price-x.yearLow)/(x.yearHigh-x.yearLow)*100)):null;
-  return {...x,price,belowHigh,aboveLow,ytd,vsAvg,range};
+  const a=alerts[x.symbol]||{}; const hitLow=Number.isFinite(price)&&Number.isFinite(a.below)&&price<=a.below; const hitHigh=Number.isFinite(price)&&Number.isFinite(a.above)&&price>=a.above;
+  return {...x,price,belowHigh,aboveLow,ytd,vsAvg,range,alert:a,hitLow,hitHigh};
 }
 function label(x){
   if(!Number.isFinite(x.belowHigh))return "Year range unavailable";
@@ -228,6 +260,7 @@ function allRows(){
   if(view==="losers")a=a.filter(x=>x.dayPct<0);
   if(view==="dips")a=a.filter(x=>Number.isFinite(x.belowHigh)); if(view==="belowAvg")a=a.filter(x=>Number.isFinite(x.vsAvg)&&x.vsAvg<0);
   if(view==="nearHigh")a=a.filter(x=>Number.isFinite(x.belowHigh)&&x.belowHigh>=-5);
+  if(view==="alerts")a=a.filter(x=>Number.isFinite(x.alert?.below)||Number.isFinite(x.alert?.above));
   const mode=$("sort").value;
   const sorter={
     dayDesc:(a,b)=>(b.dayPct??-9999)-(a.dayPct??-9999),
@@ -250,10 +283,10 @@ function render(){
   $("losers").innerHTML=mini([...all].sort((a,b)=>a.dayPct-b.dayPct));
   const rows=allRows();
   $("list").innerHTML=rows.length?rows.map(x=>`
-    <article class="stock">
+    <article class="stock ${x.hitLow?"alert-low":""} ${x.hitHigh?"alert-high":""}">
       <div class="stock-top">
         <div><a href="https://finance.yahoo.com/quote/${encodeURIComponent(x.symbol)}" target="_blank"><div class="symbol">${x.symbol}</div><div class="company">${x.name}</div></a></div>
-        <div><div class="price">${Number.isFinite(x.price)?"$"+num(x.price):"—"}</div><div class="day ${cls(x.dayPct)}">${pct(x.dayPct)}</div></div>
+        <div><div class="price">${Number.isFinite(x.price)?"$"+num(x.price):"—"}</div><div class="day ${cls(x.dayPct)}">${pct(x.dayPct)}</div>${Number.isFinite(x.extendedPrice)&&["premarket","afterhours"].includes(x.extendedSession)?`<div class="extended">${x.extendedSession==="premarket"?"Pre":"After"}: $${num(x.extendedPrice)}${Number.isFinite(x.regularPrice)?` (${pct((x.extendedPrice/x.regularPrice-1)*100)})`:""}</div>`:""}</div>
       </div>
       <div class="metrics">
         <div class="metric"><div class="label">2026 average close</div><div class="value">${Number.isFinite(x.yearAvg)?"$"+num(x.yearAvg):"—"}</div></div>
@@ -266,9 +299,15 @@ function render(){
         <div class="metric"><div class="label">Year range position</div><div class="value">${Number.isFinite(x.range)?num(x.range,0)+"%":"—"}</div></div>
       </div>
       <div class="rangebar" title="Position inside 2026 high-low range"><div class="rangefill" style="width:${Number.isFinite(x.range)?x.range:0}%"></div></div>
-      <div class="bottom"><span class="tag">${label(x)}${Number.isFinite(x.range)?" • "+num(x.range,0)+"% up the yearly range":""}</span><button class="remove" onclick="removeStock('${x.symbol}')">Remove</button></div>
+      <div class="bottom"><div><span class="tag">${label(x)}${Number.isFinite(x.range)?" • "+num(x.range,0)+"% up the yearly range":""}</span><div class="alerttext ${x.hitLow||x.hitHigh?"alert-hit":""}">${alertText(x)}</div></div><div class="actions"><button class="chartbtn" onclick="toggleChart('${x.symbol}')">Chart</button><button class="alertbtn" onclick="setAlert('${x.symbol}')">Alert</button><button class="remove" onclick="removeStock('${x.symbol}')">Remove</button></div></div>
+      <div id="chart-${x.symbol}" class="chartpanel"><div class="charthead"><span class="charttitle">${x.symbol} price chart</span><div class="charttabs"><button onclick="loadChart('${x.symbol}','1d',this)">1D</button><button onclick="loadChart('${x.symbol}','1mo',this)">1M</button><button class="active" onclick="loadChart('${x.symbol}','3mo',this)">3M</button><button onclick="loadChart('${x.symbol}','1y',this)">1Y</button></div></div><div class="chartwrap"><canvas id="canvas-${x.symbol}"></canvas></div><div id="chartnote-${x.symbol}" class="chartnote">Tap a period to change the chart.</div></div>
     </article>`).join(""):'<div class="empty">No stocks match this view.</div>';
 }
+function alertText(x){const a=x.alert||{},parts=[];if(Number.isFinite(a.below))parts.push(`Buy/below $${num(a.below)}`);if(Number.isFinite(a.above))parts.push(`Above $${num(a.above)}`);if(!parts.length)return "No visual alert set";return (x.hitLow?"⚠ Price reached low alert • ":x.hitHigh?"✓ Price reached high alert • ":"")+parts.join(" • ")}
+window.setAlert=s=>{const a=alerts[s]||{};const low=prompt(`${s}: highlight when price is at or below. Leave blank to clear.`,Number.isFinite(a.below)?a.below:"");if(low===null)return;const high=prompt(`${s}: highlight when price is at or above. Leave blank to clear.`,Number.isFinite(a.above)?a.above:"");if(high===null)return;const below=low.trim()===""?null:Number(low),above=high.trim()===""?null:Number(high);alerts[s]={};if(Number.isFinite(below)&&below>0)alerts[s].below=below;if(Number.isFinite(above)&&above>0)alerts[s].above=above;if(!Object.keys(alerts[s]).length)delete alerts[s];save();render()};
+window.toggleChart=async s=>{const p=$(`chart-${s}`);const opening=!p.classList.contains("open");p.classList.toggle("open");if(opening)await loadChart(s,"3mo",p.querySelector('.charttabs button.active'))};
+window.loadChart=async(s,range,btn)=>{const panel=$(`chart-${s}`);panel.querySelectorAll('.charttabs button').forEach(b=>b.classList.remove('active'));if(btn)btn.classList.add('active');const note=$(`chartnote-${s}`);note.textContent="Loading chart…";try{const key=`${s}:${range}`;let pts=chartCache[key];if(!pts){pts=await getChart(s,range);chartCache[key]=pts}drawChart($(`canvas-${s}`),pts);const first=pts[0].v,last=pts[pts.length-1].v;note.textContent=`${range.toUpperCase()} change: ${pct((last/first-1)*100)} • Low $${num(Math.min(...pts.map(p=>p.v)))} • High $${num(Math.max(...pts.map(p=>p.v)))}`}catch(e){note.textContent="Chart unavailable from the free feed right now."}};
+function drawChart(canvas,pts){const rect=canvas.getBoundingClientRect(),dpr=window.devicePixelRatio||1;canvas.width=Math.max(300,rect.width*dpr);canvas.height=Math.max(160,rect.height*dpr);const c=canvas.getContext('2d');c.scale(dpr,dpr);const w=rect.width,h=rect.height,pad=18,vals=pts.map(p=>p.v),min=Math.min(...vals),max=Math.max(...vals),span=max-min||1;c.clearRect(0,0,w,h);c.strokeStyle='#29323e';c.lineWidth=1;c.beginPath();for(let i=0;i<4;i++){const y=pad+(h-pad*2)*i/3;c.moveTo(pad,y);c.lineTo(w-pad,y)}c.stroke();c.strokeStyle=vals[vals.length-1]>=vals[0]?'#21d765':'#ff6257';c.lineWidth=2;c.beginPath();pts.forEach((p,i)=>{const x=pad+(w-pad*2)*i/(pts.length-1),y=h-pad-(p.v-min)/span*(h-pad*2);i?c.lineTo(x,y):c.moveTo(x,y)});c.stroke();c.fillStyle='#9ba8b7';c.font='11px -apple-system';c.fillText(`$${num(max)}`,2,12);c.fillText(`$${num(min)}`,2,h-4)}
 async function refresh(){
   if(refreshing)return;
   refreshing=true;
@@ -297,6 +336,10 @@ async function refresh(){
         }
       }
 
+      // Outside regular hours, try to retrieve a separate extended-hours price.
+      const session=marketSession().key, needExtended=["premarket","afterhours"].includes(session)&&(!old.extendedAt||(Date.now()-old.extendedAt)>10*60*1000);
+      if(needExtended){try{Object.assign(merged,await getExtended(s))}catch(e){merged.extendedError=String(e?.message||"extended unavailable")}}
+
       // Yahoo supplies the 2026 history. Refresh it once daily or when absent.
       const needYear=!old.yearAt||(Date.now()-old.yearAt)>24*60*60*1000;
       if(needYear){
@@ -323,6 +366,7 @@ async function refresh(){
       await sleep(needYear?1200:350);
     }
 
+    updateMarketBadge();
     $("status").textContent=stopped
       ?`Stopped. ${ok} stocks loaded.`
       :`Updated ${new Date().toLocaleTimeString()}. ${ok} loaded; ${fail} unavailable. Live Finnhub quotes: ${quoteOk}${quoteFail?`; quote failures: ${quoteFail}`:""}. Auto-refreshes every 5 minutes.`;
@@ -331,7 +375,7 @@ async function refresh(){
     refreshing=false;
   }
 }
-window.removeStock=s=>{watch=watch.filter(x=>x.symbol!==s);delete data[s];save();render()};
+window.removeStock=s=>{watch=watch.filter(x=>x.symbol!==s);delete data[s];delete alerts[s];save();render()};
 $("refresh").onclick=refresh;$("stop").onclick=()=>stopped=true;
 function startAutoRefresh(){
   if(autoTimer)clearInterval(autoTimer);
@@ -355,8 +399,10 @@ $("add").onclick=()=>{
   $("newTicker").value="";
 };
 $("reset").onclick=()=>{
-  if(confirm("Restore the original 50-stock list?")){watch=ORIGINAL.map(x=>({symbol:x[0],name:x[1]}));data={};save();render()}
+  if(confirm("Restore the original 50-stock list?")){watch=ORIGINAL.map(x=>({symbol:x[0],name:x[1]}));data={};alerts={};save();render()}
 };
+updateMarketBadge();
+setInterval(updateMarketBadge,60000);
 render();
 startAutoRefresh();
 setTimeout(refresh,400);
