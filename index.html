@@ -47,13 +47,13 @@ details{margin-top:16px;background:var(--panel);border:1px solid var(--line);bor
 <body>
 <header>
 <div class="headerline"><h1>Steve's Stock Board</h1><span id="marketBadge" class="marketbadge">Checking market…</span></div>
-<div class="sub">Live quotes • biggest gainers to biggest losers • charts • visual alerts</div>
+<div class="sub">Live quotes • opportunity ranking • gainers and losers • charts • visual alerts</div>
 </header>
 <main>
 <div class="controls">
 <input id="search" placeholder="Search ticker or company">
 <select id="sort">
-<option value="dayDesc">Biggest gainers today</option><option value="dayAsc">Biggest losers today</option>
+<option value="opportunity" selected>Biggest opportunities</option><option value="dayDesc">Biggest gainers today</option><option value="dayAsc">Biggest losers today</option>
 <option value="dipDesc">Deepest below 2026 high</option><option value="belowAvg">Furthest below 2026 average</option>
 <option value="nearLow">Closest to 2026 low</option><option value="ytdDesc">Best 2026 gain</option>
 <option value="ytdAsc">Worst 2026 result</option><option value="symbol">Alphabetical</option>
@@ -62,7 +62,7 @@ details{margin-top:16px;background:var(--panel);border:1px solid var(--line);bor
 </div>
 <div id="status" class="status">Loading saved prices. Add your Finnhub key in Settings for live quotes.</div>
 <div class="tabs">
-<button class="active" data-view="all">All stocks</button><button data-view="gainers">Gainers</button>
+<button class="active" data-view="all">All stocks</button><button data-view="opportunities">Biggest opportunities</button><button data-view="gainers">Gainers</button>
 <button data-view="losers">Losers</button><button data-view="dips">Deepest dips</button>
 <button data-view="belowAvg">Below average</button><button data-view="nearHigh">Near highs</button><button data-view="alerts">Alerts</button>
 </div>
@@ -155,16 +155,30 @@ function calculated(x){
  const aboveLow=Number.isFinite(price)&&Number.isFinite(x.yearLow)?(price/x.yearLow-1)*100:null,ytd=Number.isFinite(price)&&Number.isFinite(x.yearFirst)?(price/x.yearFirst-1)*100:null;
  const vsAvg=Number.isFinite(price)&&Number.isFinite(x.yearAvg)?(price/x.yearAvg-1)*100:null,range=Number.isFinite(price)&&Number.isFinite(x.yearHigh)&&Number.isFinite(x.yearLow)&&x.yearHigh>x.yearLow?Math.max(0,Math.min(100,(price-x.yearLow)/(x.yearHigh-x.yearLow)*100)):null;
  const a=alerts[x.symbol]||{},hitLow=Number.isFinite(price)&&Number.isFinite(a.below)&&price<=a.below,hitHigh=Number.isFinite(price)&&Number.isFinite(a.above)&&price>=a.above;
- return{...x,price,belowHigh,aboveLow,ytd,vsAvg,range,alert:a,hitLow,hitHigh};
+ let opportunity=null;
+ if(Number.isFinite(belowHigh)&&Number.isFinite(aboveLow)&&Number.isFinite(vsAvg)){
+   const pullback=Math.abs(belowHigh);
+   const pullbackSweet=Math.max(0,100-Math.abs(pullback-22)*3.2);
+   const belowAvgScore=Math.max(0,Math.min(100,50-vsAvg*2.5));
+   const safetyScore=Math.max(0,Math.min(100,(aboveLow-8)*3));
+   const dayScore=Number.isFinite(x.dayPct)?Math.max(0,Math.min(100,50+x.dayPct*5)):50;
+   const fallingKnifePenalty=aboveLow<12?(12-aboveLow)*7:0;
+   const nearHighPenalty=pullback<6?(6-pullback)*8:0;
+   opportunity=Math.max(0,Math.min(100,
+      pullbackSweet*.40 + belowAvgScore*.25 + safetyScore*.25 + dayScore*.10
+      - fallingKnifePenalty - nearHighPenalty
+   ));
+ }
+ return{...x,price,belowHigh,aboveLow,ytd,vsAvg,range,opportunity,alert:a,hitLow,hitHigh};
 }
 function label(x){if(!Number.isFinite(x.belowHigh))return"Year range unavailable";const d=Math.abs(x.belowHigh);return d<=3?"Near 2026 high":d<=10?"Small pullback":d<=20?"Moderate pullback":"Deep pullback"}
 function allRows(){
  const q=$("search").value.trim().toLowerCase();let a=watch.map(w=>calculated({...w,...(data[w.symbol]||{})}));
  if(q)a=a.filter(x=>x.symbol.toLowerCase().includes(q)||x.name.toLowerCase().includes(q));
- if(view==="gainers")a=a.filter(x=>x.dayPct>0);if(view==="losers")a=a.filter(x=>x.dayPct<0);if(view==="dips")a=a.filter(x=>Number.isFinite(x.belowHigh));
+ if(view==="opportunities")a=a.filter(x=>Number.isFinite(x.opportunity));if(view==="gainers")a=a.filter(x=>x.dayPct>0);if(view==="losers")a=a.filter(x=>x.dayPct<0);if(view==="dips")a=a.filter(x=>Number.isFinite(x.belowHigh));
  if(view==="belowAvg")a=a.filter(x=>Number.isFinite(x.vsAvg)&&x.vsAvg<0);if(view==="nearHigh")a=a.filter(x=>Number.isFinite(x.belowHigh)&&x.belowHigh>=-5);
  if(view==="alerts")a=a.filter(x=>Number.isFinite(x.alert?.below)||Number.isFinite(x.alert?.above));
- const sorters={dayDesc:(a,b)=>(b.dayPct??-9999)-(a.dayPct??-9999),dayAsc:(a,b)=>(a.dayPct??9999)-(b.dayPct??9999),dipDesc:(a,b)=>(a.belowHigh??9999)-(b.belowHigh??9999),belowAvg:(a,b)=>(a.vsAvg??9999)-(b.vsAvg??9999),nearLow:(a,b)=>(a.aboveLow??9999)-(b.aboveLow??9999),ytdDesc:(a,b)=>(b.ytd??-9999)-(a.ytd??-9999),ytdAsc:(a,b)=>(a.ytd??9999)-(b.ytd??9999),symbol:(a,b)=>a.symbol.localeCompare(b.symbol)};
+ const sorters={opportunity:(a,b)=>(b.opportunity??-9999)-(a.opportunity??-9999),dayDesc:(a,b)=>(b.dayPct??-9999)-(a.dayPct??-9999),dayAsc:(a,b)=>(a.dayPct??9999)-(b.dayPct??9999),dipDesc:(a,b)=>(a.belowHigh??9999)-(b.belowHigh??9999),belowAvg:(a,b)=>(a.vsAvg??9999)-(b.vsAvg??9999),nearLow:(a,b)=>(a.aboveLow??9999)-(b.aboveLow??9999),ytdDesc:(a,b)=>(b.ytd??-9999)-(a.ytd??-9999),ytdAsc:(a,b)=>(a.ytd??9999)-(b.ytd??9999),symbol:(a,b)=>a.symbol.localeCompare(b.symbol)};
  return a.sort(sorters[$("sort").value]);
 }
 function mini(items){return items.length?items.slice(0,5).map(x=>`<div class="mini"><div><span class="ticker">${x.symbol}</span><div class="name">${x.name}</div></div><b class="${cls(x.dayPct)}">${pct(x.dayPct)}</b></div>`).join(""):'<div class="name">Waiting for data…</div>'}
@@ -185,7 +199,7 @@ function render(){
  <div class="metric"><div class="label">2026 low</div><div class="value">${Number.isFinite(x.yearLow)?"$"+num(x.yearLow):"—"}</div></div>
  <div class="metric"><div class="label">Above low</div><div class="value">${Number.isFinite(x.aboveLow)?num(x.aboveLow)+"%":"—"}</div></div>
  <div class="metric"><div class="label">2026 gain/loss</div><div class="value ${cls(x.ytd)}">${pct(x.ytd)}</div></div>
- <div class="metric"><div class="label">Range position</div><div class="value">${Number.isFinite(x.range)?num(x.range,0)+"%":"—"}</div></div>
+ <div class="metric"><div class="label">Range position</div><div class="value">${Number.isFinite(x.range)?num(x.range,0)+"%":"—"}</div></div><div class="metric"><div class="label">Opportunity score</div><div class="value ${Number.isFinite(x.opportunity)&&x.opportunity>=70?"pos":Number.isFinite(x.opportunity)&&x.opportunity<40?"neg":""}">${Number.isFinite(x.opportunity)?num(x.opportunity,0)+"/100":"—"}</div></div>
  </div>
  <div class="rangebar"><div class="rangefill" style="width:${Number.isFinite(x.range)?x.range:0}%"></div></div>
  <div class="bottom"><div><span class="tag">${label(x)}${Number.isFinite(x.range)?` • ${num(x.range,0)}% up range`:""}</span><div class="alerttext ${x.hitLow||x.hitHigh?"alert-hit":""}">${alertText(x)}</div></div>
@@ -213,7 +227,7 @@ async function refresh(){
 }
 window.removeStock=s=>{watch=watch.filter(x=>x.symbol!==s);delete data[s];delete alerts[s];save();render()}
 $("refresh").onclick=refresh;$("stop").onclick=()=>stopped=true;$("search").oninput=render;$("sort").onchange=render;
-document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{document.querySelectorAll(".tabs button").forEach(x=>x.classList.remove("active"));b.classList.add("active");view=b.dataset.view;if(view==="gainers")$("sort").value="dayDesc";if(view==="losers")$("sort").value="dayAsc";if(view==="dips"||view==="nearHigh")$("sort").value="dipDesc";if(view==="belowAvg")$("sort").value="belowAvg";render()});
+document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{document.querySelectorAll(".tabs button").forEach(x=>x.classList.remove("active"));b.classList.add("active");view=b.dataset.view;if(view==="opportunities")$("sort").value="opportunity";if(view==="gainers")$("sort").value="dayDesc";if(view==="losers")$("sort").value="dayAsc";if(view==="dips"||view==="nearHigh")$("sort").value="dipDesc";if(view==="belowAvg")$("sort").value="belowAvg";render()});
 $("saveKey").onclick=()=>{localStorage.setItem("finnhubKey",$("apiKey").value.trim());$("status").textContent="Finnhub key saved on this device."}
 $("add").onclick=()=>{const s=$("newTicker").value.trim().toUpperCase().replace(/\s/g,"");if(s&&!watch.some(x=>x.symbol===s)){watch.push({symbol:s,name:s});save();render()}$("newTicker").value=""}
 $("reset").onclick=()=>{if(confirm("Restore the original 50-stock list?")){watch=ORIGINAL.map(x=>({symbol:x[0],name:x[1]}));data={};alerts={};save();render();refresh()}}
