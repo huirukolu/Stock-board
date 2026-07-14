@@ -191,15 +191,29 @@ async function getYear(symbol){
   const adj=res.indicators?.adjclose?.[0]?.adjclose||[];
   const rawClose=q.close||[], rawHigh=q.high||[], rawLow=q.low||[];
 
+  // Yahoo's adjusted-close series can occasionally arrive on the wrong
+  // decimal scale after a split. Anchor the entire adjusted series to the
+  // latest regular-market/raw close so $98 cannot be displayed as $980.
+  let lastRaw=null,lastAdjusted=null;
+  for(let i=rawClose.length-1;i>=0;i--){
+    if(lastRaw===null&&Number.isFinite(rawClose[i]))lastRaw=rawClose[i];
+    if(lastAdjusted===null&&Number.isFinite(adj[i]))lastAdjusted=adj[i];
+    if(lastRaw!==null&&lastAdjusted!==null)break;
+  }
+  const metaPrice=res.meta?.regularMarketPrice;
+  const anchor=Number.isFinite(metaPrice)?metaPrice:lastRaw;
+  const seriesScale=Number.isFinite(anchor)&&Number.isFinite(lastAdjusted)&&lastAdjusted!==0?anchor/lastAdjusted:1;
+
   const rows=[];
   for(let i=0;i<rawClose.length;i++){
     const c=rawClose[i], a=adj[i];
     if(!Number.isFinite(c))continue;
-    const factor=Number.isFinite(a)&&c!==0?a/c:1;
+    const adjustedClose=Number.isFinite(a)?a*seriesScale:c;
+    const dailyFactor=c!==0?adjustedClose/c:1;
     rows.push({
-      close:Number.isFinite(a)?a:c,
-      high:Number.isFinite(rawHigh[i])?rawHigh[i]*factor:(Number.isFinite(a)?a:c),
-      low:Number.isFinite(rawLow[i])?rawLow[i]*factor:(Number.isFinite(a)?a:c)
+      close:adjustedClose,
+      high:Number.isFinite(rawHigh[i])?rawHigh[i]*dailyFactor:adjustedClose,
+      low:Number.isFinite(rawLow[i])?rawLow[i]*dailyFactor:adjustedClose
     });
   }
   if(!rows.length)throw Error("no prices");
@@ -231,10 +245,28 @@ async function getChart(symbol,range="3mo"){
   const path=`/v8/finance/chart/${encodeURIComponent(y)}?range=${range}&interval=${interval}&includePrePost=${range==="1d"?"true":"false"}&events=history`;
   const j=await fetchJsonWithFallback(yahooUrls(path)),res=j?.chart?.result?.[0]; if(!res)throw Error("chart unavailable");
   const ts=res.timestamp||[],close=res.indicators?.adjclose?.[0]?.adjclose||res.indicators?.quote?.[0]?.close||[];
-  const points=[]; for(let i=0;i<ts.length;i++)if(Number.isFinite(close[i]))points.push({t:ts[i]*1000,v:close[i]});
+  let lastClose=null; for(let i=close.length-1;i>=0;i--){if(Number.isFinite(close[i])){lastClose=close[i];break}}
+  const anchor=res.meta?.regularMarketPrice;
+  const scale=Number.isFinite(anchor)&&Number.isFinite(lastClose)&&lastClose!==0?anchor/lastClose:1;
+  const points=[]; for(let i=0;i<ts.length;i++)if(Number.isFinite(close[i]))points.push({t:ts[i]*1000,v:close[i]*scale});
   if(points.length<2)throw Error("not enough chart data"); return points;
 }
+function normalizeLiveScale(x){
+  const ref=Number.isFinite(x.regularPrice)?x.regularPrice:(Number.isFinite(x.historyPrice)?x.historyPrice:null);
+  if(!Number.isFinite(ref)||!Number.isFinite(x.price)||ref<=0||x.price<=0)return x;
+  const ratio=x.price/ref;
+  let divisor=1;
+  if(ratio>7&&ratio<13)divisor=10;
+  else if(ratio>70&&ratio<130)divisor=100;
+  else if(ratio>700&&ratio<1300)divisor=1000;
+  else if(ratio>.07&&ratio<.13)divisor=.1;
+  if(divisor===1)return x;
+  const fixed={...x};
+  ["price","dayDollar","dayHigh","dayLow","prev"].forEach(k=>{if(Number.isFinite(fixed[k]))fixed[k]/=divisor});
+  return fixed;
+}
 function calculated(x){
+  x=normalizeLiveScale(x);
   const price=Number.isFinite(x.price)?x.price:x.historyPrice;
   const belowHigh=Number.isFinite(price)&&Number.isFinite(x.yearHigh)?(price/x.yearHigh-1)*100:null;
   const aboveLow=Number.isFinite(price)&&Number.isFinite(x.yearLow)?(price/x.yearLow-1)*100:null;
