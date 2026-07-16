@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#07090c">
 <meta name="description" content="Steve's Stock X-Ray — valuation, fundamentals, news, analyst ratings and an explained research score.">
-<title>Steve's Stock X-Ray 2.0</title>
+<title>Steve's Stock X-Ray 3.0</title>
 <style>
 :root{
   --bg:#07090c;--panel:#11161d;--panel2:#171e27;--text:#f5f7fa;--muted:#9ba8b7;
@@ -48,7 +48,15 @@ button{font-weight:800;cursor:pointer}.primary{background:#173b63;border-color:#
 details{margin-top:10px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:13px}
 summary{font-weight:850;cursor:pointer}.settings{display:grid;gap:8px;margin-top:11px}.note{font-size:12px;color:var(--muted);line-height:1.45}
 .empty{color:var(--muted);padding:10px 0}.warning{color:var(--gold)}
-table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line)}th{color:var(--muted)}
+table{width:100%;border-collapse:collapse;font-size:12px}
+.scoreGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.bigScore{background:var(--panel2);border-radius:12px;padding:12px;text-align:center}
+.bigScore .num{font-size:26px;font-weight:950;margin-top:4px}
+.tagGood{color:var(--green)}.tagWarn{color:var(--gold)}.tagBad{color:var(--red)}
+.progressWrap{margin-top:7px;height:8px;background:#28313c;border-radius:99px;overflow:hidden}
+.progressFill{height:100%;background:linear-gradient(90deg,var(--red),var(--gold),var(--green))}
+textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:11px;background:var(--panel2);color:var(--text);padding:10px;font:inherit;resize:vertical}
+@media(min-width:760px){.scoreGrid{grid-template-columns:repeat(4,1fr)}}th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line)}th{color:var(--muted)}
 @media(min-width:760px){
   .grid{grid-template-columns:1fr 1fr}.span2{grid-column:1/-1}
   .metrics{grid-template-columns:repeat(4,1fr)}
@@ -58,7 +66,7 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;p
 </head>
 <body>
 <header>
-  <div class="headerline"><div><h1>Steve's Stock X-Ray 2.0</h1><div class="sub">Deep research page — separate from the Stock Board</div></div><button id="backBtn">Board</button></div>
+  <div class="headerline"><div><h1>Steve's Stock X-Ray 3.0</h1><div class="sub">Deep research laboratory — original Stock Board remains untouched</div></div><button id="backBtn">Board</button></div>
 </header>
 <main>
   <div class="searchbar">
@@ -89,6 +97,12 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;p
       <h2>SteveScore breakdown</h2>
       <div id="scoreBars" class="scoreBars"></div>
       <div class="note" style="margin-top:10px">This is an explained research score, not a promise or automatic trade instruction.</div>
+    </section>
+
+    <section class="card span2">
+      <h2>Decision dashboard</h2>
+      <div id="decisionScores" class="scoreGrid"></div>
+      <div id="marginSafety" class="explain" style="margin-top:10px"></div>
     </section>
 
     <section class="card">
@@ -159,6 +173,18 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;p
       <h2>What changed / earnings checklist</h2>
       <div id="changedSummary" class="explain"></div>
       <div class="note" style="margin-top:9px">This version cannot read a full earnings-call transcript directly without a separate licensed transcript or AI service. It does summarize the latest available metrics, guidance-related headlines and analyst changes, and gives you the exact items to verify.</div>
+    </section>
+
+    <section class="card span2">
+      <h2>Buffett-style explanation</h2>
+      <div id="buffettExplain" class="explain"></div>
+    </section>
+
+    <section class="card span2">
+      <h2>My notes</h2>
+      <textarea id="myNotes" placeholder="Write your own notes about this company, entry price, concerns, or what would change your mind."></textarea>
+      <div class="actions" style="margin-top:8px"><button id="saveNotesBtn">Save notes</button><button id="clearNotesBtn">Clear notes</button></div>
+      <div class="note" style="margin-top:7px">Notes are saved only on this device and separately for each ticker.</div>
     </section>
 
     <section class="card span2">
@@ -285,12 +311,23 @@ function compute(){
    finite(belowHigh)?(Math.abs(belowHigh)>=8&&Math.abs(belowHigh)<=25?85:Math.abs(belowHigh)<8?60:Math.abs(belowHigh)<=40?55:25):null,
    scoreLinear(m.yearToDatePriceReturnDaily,-25,30)
  ]);
- const scores={valuation,growth,profitability,balance,cashflow,analyst,momentum};
- const weights={valuation:.20,growth:.16,profitability:.17,balance:.15,cashflow:.11,analyst:.10,momentum:.11};
+ const dividendYield=first(m.dividendYieldIndicatedAnnual,raw(s.summaryDetail?.dividendYield)!=null?raw(s.summaryDetail?.dividendYield)*100:null);
+ const payoutRatio=first(m.payoutRatioTTM,raw(s.summaryDetail?.payoutRatio)!=null?raw(s.summaryDetail?.payoutRatio)*100:null);
+ const dividend=average([
+   scoreLinear(dividendYield,0,6),
+   finite(payoutRatio)?(payoutRatio>0&&payoutRatio<65?85:payoutRatio<85?60:payoutRatio<=0?25:30):null
+ ]);
+ const risk=average([
+   finite(beta)?scoreLinear(beta,2.1,.65,true):null,
+   finite(debtEquity)?debtScore(debtEquity):null,
+   finite(belowHigh)&&belowHigh<-40?25:75
+ ]);
+ const scores={valuation,growth,profitability,balance,cashflow,analyst,momentum,dividend,risk};
+ const weights={valuation:.18,growth:.14,profitability:.15,balance:.14,cashflow:.10,analyst:.09,momentum:.09,dividend:.07,risk:.04};
  let weighted=0,w=0;for(const [k,v] of Object.entries(scores))if(finite(v)){weighted+=v*weights[k];w+=weights[k]}
  let overall=w?weighted/w:null;
  const available=Object.values(scores).filter(finite).length;
- const confidence=clamp(available/7*78 + (state.news.length?8:0) + (state.recommendations.length?7:0) + (state.profile.name?7:0));
+ const confidence=clamp(available/9*78 + (state.news.length?8:0) + (state.recommendations.length?7:0) + (state.profile.name?7:0));
  if(finite(overall)){
    if(finite(pe)&&pe>70)overall-=6;
    if(finite(debtEquity)&&debtEquity>200)overall-=6;
@@ -298,7 +335,11 @@ function compute(){
    overall=clamp(overall);
  }
  state.scores=scores;state.confidence=confidence;state.overall=overall;
- state.derived={price,pe,fpe,ps,pb,peg,revGrowth,epsGrowth,grossMargin,operatingMargin,netMargin,roe,currentRatio,debtEquity,fcf,cash,debt,target,analystUpside,beta,high52,low52,belowHigh,aboveLow};
+ const fairByPE=finite(price)&&finite(pe)&&pe>0?price*(Math.min(Math.max(peScore(pe)>=80?pe:Math.min(pe,35),12),35)/pe):null;
+ const fairByTarget=target;
+ const fairEstimate=average([fairByPE,fairByTarget]);
+ const marginOfSafety=finite(fairEstimate)&&finite(price)?(fairEstimate/price-1)*100:null;
+ state.derived={price,pe,fpe,ps,pb,peg,revGrowth,epsGrowth,grossMargin,operatingMargin,netMargin,roe,currentRatio,debtEquity,fcf,cash,debt,target,analystUpside,beta,high52,low52,belowHigh,aboveLow,dividendYield,payoutRatio,fairEstimate,marginOfSafety};
  state.verdict=verdict(overall,confidence);
 }
 function recommendationScore(){
@@ -327,7 +368,7 @@ function buildNarrative(){
  if(finite(d.belowHigh)&&d.belowHigh<-40)bad.push("the price decline may represent a breakdown, not merely a bargain");
  if(!good.length)good.push("the available measurements are mixed");
  if(!bad.length)bad.push("no major quantitative warning was detected in the available fields");
- return `The X-Ray rates ${state.name} as <b>${state.verdict}</b>. The main positives are that ${good.join(", ")}. The main caution is that ${bad.join(", ")}. This conclusion uses ${Object.values(state.scores).filter(finite).length} of 7 scoring sections, so confidence is ${fmt(state.confidence,0)}%.`;
+ return `The X-Ray rates ${state.name} as <b>${state.verdict}</b>. The main positives are that ${good.join(", ")}. The main caution is that ${bad.join(", ")}. This conclusion uses ${Object.values(state.scores).filter(finite).length} of 9 scoring sections, so confidence is ${fmt(state.confidence,0)}%.`;
 }
 function strengthsRisks(){
  const d=state.derived,s=state.scores,strengths=[],risks=[];
@@ -434,6 +475,33 @@ function renderCompare(a,b){
  $("compareSummary").innerHTML=`<b>${safe(winner)}</b> Scores are judged using the same valuation, growth, quality, balance-sheet and risk framework. A higher score does not automatically mean the stock is the better purchase at every price.`;
 }
 
+
+function decisionScoreCard(label,value){
+ const cls=!finite(value)?"flat":value>=75?"tagGood":value>=55?"tagWarn":"tagBad";
+ return `<div class="bigScore"><div class="label">${safe(label)}</div><div class="num ${cls}">${finite(value)?fmt(value,0):"—"}</div><div class="progressWrap"><div class="progressFill" style="width:${finite(value)?clamp(value):0}%"></div></div></div>`;
+}
+function marginSafetyText(){
+ const d=state.derived;
+ if(!finite(d.marginOfSafety))return "A rough margin-of-safety estimate could not be calculated from the available data.";
+ if(d.marginOfSafety>=20)return `Estimated margin of safety: <b class="pos">${pct(d.marginOfSafety)}</b>. The current price is meaningfully below the blended rough-value estimate of ${money(d.fairEstimate)}.`;
+ if(d.marginOfSafety>=5)return `Estimated margin of safety: <b class="warning">${pct(d.marginOfSafety)}</b>. The stock appears modestly below the blended rough-value estimate of ${money(d.fairEstimate)}.`;
+ if(d.marginOfSafety>-10)return `Estimated margin of safety: <b class="warning">${pct(d.marginOfSafety)}</b>. The current price is close to the blended rough-value estimate of ${money(d.fairEstimate)}.`;
+ return `Estimated margin of safety: <b class="neg">${pct(d.marginOfSafety)}</b>. The current price is above the blended rough-value estimate of ${money(d.fairEstimate)}.`;
+}
+function buffettLens(){
+ const d=state.derived,s=state.scores,parts=[];
+ parts.push(`<b>What the business looks like:</b> ${safe(state.name)} appears ${s.profitability>=70?"economically strong":"mixed in business quality"} based on the available margins and returns.`);
+ parts.push(`<b>Financial durability:</b> ${s.balance>=70?"The balance sheet appears resilient.":s.balance>=50?"The balance sheet is acceptable but deserves review.":"Financial strength is a concern."}`);
+ parts.push(`<b>Owner earnings:</b> ${s.cashflow>=70?"Cash generation is supportive.":s.cashflow>=50?"Cash generation is adequate.":"Cash-flow quality is weak or incomplete."}`);
+ parts.push(`<b>Price versus quality:</b> ${s.valuation>=70?"The valuation is reasonable relative to the available fundamentals.":s.valuation>=50?"The valuation is not obviously cheap.":"The valuation leaves little margin for error."}`);
+ parts.push(`<b>Long-term question:</b> Would you be comfortable owning this business for five years if the stock market closed tomorrow? Focus on competitive advantage, management discipline, reinvestment returns and debt—not just the next quarter.`);
+ return parts.join("<br><br>");
+}
+function loadNotes(){
+ const key=`xrayNotes:${state.symbol}`;
+ $("myNotes").value=localStorage.getItem(key)||"";
+}
+
 function render(){
  const d=state.derived,q=state.quote;
  $("hero").hidden=false;$("results").hidden=false;
@@ -449,12 +517,12 @@ function render(){
  if(finite(d.belowHigh))pills.push(`${fmt(Math.abs(d.belowHigh),1)}% below 52-week high`);if(finite(d.analystUpside))pills.push(`Analyst upside ${pct(d.analystUpside)}`);
  $("pills").innerHTML=pills.map(x=>`<span class="pill">${safe(x)}</span>`).join("");
 
- const labels={valuation:"Valuation",growth:"Growth",profitability:"Profitability",balance:"Balance sheet",cashflow:"Cash flow",analyst:"Analyst view",momentum:"Price setup"};
+ const labels={valuation:"Valuation",growth:"Growth",profitability:"Profitability",balance:"Balance sheet",cashflow:"Cash flow",analyst:"Analyst view",momentum:"Price setup",dividend:"Dividend",risk:"Risk control"};
  $("scoreBars").innerHTML=Object.entries(state.scores).map(([k,v])=>`<div class="scoreLine"><span>${labels[k]}</span><div class="bar"><div class="fill" style="width:${finite(v)?clamp(v):0}%"></div></div><b>${finite(v)?fmt(v,0):"—"}</b></div>`).join("");
 
  $("valuation").innerHTML=[
    metric("Trailing P/E",fmt(d.pe,1)),metric("Forward P/E",fmt(d.fpe,1)),metric("Price / sales",fmt(d.ps,1)),metric("Price / book",fmt(d.pb,1)),
-   metric("PEG ratio",fmt(d.peg,2)),metric("52-week high",money(d.high52)),metric("Below high",finite(d.belowHigh)?fmt(Math.abs(d.belowHigh),1)+"%":"—"),metric("Above low",finite(d.aboveLow)?fmt(d.aboveLow,1)+"%":"—")
+   metric("PEG ratio",fmt(d.peg,2)),metric("Fair-value estimate",money(d.fairEstimate)),metric("Margin of safety",pct(d.marginOfSafety)),metric("52-week high",money(d.high52)),metric("Below high",finite(d.belowHigh)?fmt(Math.abs(d.belowHigh),1)+"%":"—"),metric("Above low",finite(d.aboveLow)?fmt(d.aboveLow,1)+"%":"—")
  ].join("");
  $("growth").innerHTML=[
    metric("Revenue growth",pct(d.revGrowth)),metric("EPS growth",pct(d.epsGrowth)),metric("Gross margin",pct(d.grossMargin)),metric("Operating margin",pct(d.operatingMargin)),
@@ -462,7 +530,7 @@ function render(){
  ].join("");
  $("balance").innerHTML=[
    metric("Current ratio",fmt(d.currentRatio,2)),metric("Debt / equity",finite(d.debtEquity)?fmt(d.debtEquity,1)+"%":"—"),metric("Cash",compactMoney(d.cash)),metric("Debt",compactMoney(d.debt)),
-   metric("Free cash flow",compactMoney(d.fcf)),metric("FCF / share",money(state.metrics.freeCashFlowPerShareTTM)),metric("Market cap",compactMoney(first(state.profile.marketCapitalization?state.profile.marketCapitalization*1e6:null,raw(state.summary.price?.marketCap)))),metric("Dividend yield",pct(first(state.metrics.dividendYieldIndicatedAnnual,raw(state.summary.summaryDetail?.dividendYield)!=null?raw(state.summary.summaryDetail?.dividendYield)*100:null)))
+   metric("Free cash flow",compactMoney(d.fcf)),metric("FCF / share",money(state.metrics.freeCashFlowPerShareTTM)),metric("Market cap",compactMoney(first(state.profile.marketCapitalization?state.profile.marketCapitalization*1e6:null,raw(state.summary.price?.marketCap)))),metric("Dividend yield",pct(d.dividendYield)),metric("Payout ratio",pct(d.payoutRatio))
  ].join("");
  const r=state.recommendations[0]||{};
  $("analysts").innerHTML=[
@@ -484,6 +552,15 @@ function render(){
  $("bearCase").innerHTML=bb.bear.map(x=>`• ${safe(x)}`).join("<br>");
  $("balancedConclusion").textContent=bb.conclusion;
  $("changedSummary").textContent=changedText();
+ $("decisionScores").innerHTML=[
+   decisionScoreCard("Overall",state.overall),
+   decisionScoreCard("Value",state.scores.valuation),
+   decisionScoreCard("Quality",average([state.scores.profitability,state.scores.balance,state.scores.cashflow])),
+   decisionScoreCard("Risk control",state.scores.risk)
+ ].join("");
+ $("marginSafety").innerHTML=marginSafetyText();
+ $("buffettExplain").innerHTML=buffettLens();
+ loadNotes();
 
  const sym=encodeURIComponent(state.symbol);
  $("yahooBtn").onclick=()=>open(`https://finance.yahoo.com/quote/${sym}`,"_blank");
@@ -512,6 +589,19 @@ $("analyze").onclick=analyze;
 $("ticker").addEventListener("keydown",e=>{if(e.key==="Enter")analyze()});
 $("saveKey").onclick=()=>{localStorage.setItem("finnhubKey",$("apiKey").value.trim());$("status").textContent="Finnhub key saved on this device."};
 $("backBtn").onclick=()=>{location.href="index.html"};
+
+$("saveNotesBtn").onclick=()=>{
+ if(!state.symbol){$("status").textContent="Run an X-Ray first.";return}
+ localStorage.setItem(`xrayNotes:${state.symbol}`,$("myNotes").value);
+ $("status").textContent=`Notes saved for ${state.symbol}.`;
+};
+$("clearNotesBtn").onclick=()=>{
+ if(!state.symbol)return;
+ localStorage.removeItem(`xrayNotes:${state.symbol}`);
+ $("myNotes").value="";
+ $("status").textContent=`Notes cleared for ${state.symbol}.`;
+};
+
 $("copyBtn").onclick=async()=>{
  const d=state.derived;
  const text=`${state.symbol} — ${state.name}\nSteveScore: ${finite(state.overall)?fmt(state.overall,0)+"/100":"Unavailable"}\nRating: ${state.verdict}\nPrice: ${money(d.price)}\nP/E: ${fmt(d.pe,1)}\nRevenue growth: ${pct(d.revGrowth)}\nAnalyst target: ${money(d.target)}\nConfidence: ${fmt(state.confidence,0)}%\n\n${$("explain").innerText}`;
