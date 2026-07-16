@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#07090c">
+<meta name="description" content="Steve's Stock Board — live quotes, ranked opportunities, charts, alerts, and watchlist backup.">
 <title>Steve's Stock Board</title>
 <style>
 :root{--bg:#07090c;--panel:#11161d;--panel2:#171e27;--text:#f5f7fa;--muted:#9ba8b7;--line:#29323e;--green:#21d765;--red:#ff6257;--blue:#67adff;--gold:#ffd166}
@@ -37,7 +38,7 @@ button{font-weight:750}.primary{background:#173b63;border-color:#2d73b7}
 .actions button{width:auto;padding:7px 9px;font-size:12px}.chartbtn{color:var(--blue)}.alertbtn{color:var(--gold)}.remove{color:#ffb4ae}
 .chartpanel{display:none;margin-top:11px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px}.chartpanel.open{display:block}
 .charthead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}.charttitle{font-size:13px;font-weight:850}.charttabs{display:flex;gap:5px}
-.charttabs button{width:auto;padding:6px 8px;font-size:11px}.charttabs button.active{border-color:var(--blue);background:#142a43}.chartwrap{height:180px}.chartwrap canvas{width:100%;height:100%}.chartnote{font-size:11px;color:var(--muted);margin-top:5px}
+.charttabs button{width:auto;padding:6px 8px;font-size:11px}.charttabs button.active{border-color:var(--blue);background:#142a43}.chartwrap{height:180px}.chartwrap canvas{width:100%;height:100%;display:block}.chartnote{font-size:11px;color:var(--muted);margin-top:5px}
 .tools{display:flex;gap:8px;flex-wrap:wrap;margin:13px 0}.tools input{flex:1;min-width:170px}.tools button{width:auto}
 details{margin-top:16px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:13px}summary{font-weight:850;cursor:pointer}
 .settings{display:grid;gap:9px;margin-top:12px}.note{color:var(--muted);font-size:12px;line-height:1.45}.empty{text-align:center;color:var(--muted);padding:28px}
@@ -71,7 +72,7 @@ details{margin-top:16px;background:var(--panel);border:1px solid var(--line);bor
 <div class="box"><h2>Top 5 losers</h2><div id="losers"></div></div>
 </section>
 <div id="list" class="list"></div>
-<div class="tools"><input id="newTicker" placeholder="Add ticker, for example AMZN"><button id="add">Add stock</button><button id="reset">Restore original 50</button></div>
+<div class="tools"><input id="newTicker" placeholder="Add ticker, for example AMZN"><button id="add">Add stock</button><button id="export">Backup board</button><button id="import">Restore board</button><button id="reset">Restore original 50</button><input id="importFile" type="file" accept="application/json,.json" hidden></div>
 <details>
 <summary>Settings — free market data</summary>
 <div class="settings">
@@ -89,21 +90,22 @@ const ORIGINAL=[
 ["BYDDY","BYD Company"],["CEG","Constellation Energy"],["VST","Vistra"],["VRT","Vertiv"],["CRDO","Credo Technology"],["GLO","Clough Global Opportunities"],
 ["FN","Fabrinet"],["MELI","MercadoLibre"],["PYPL","PayPal"],["KLAC","KLA"],["FLEX","Flex"],["AMD","Advanced Micro Devices"],["NBIS","Nebius Group"],
 ["MRVL","Marvell Technology"],["CMI","Cummins"],["CAT","Caterpillar"],["EQT","EQT"],["HWM","Howmet Aerospace"],["ET","Energy Transfer"],["ONTO","Onto Innovation"],
-["SKYHV","SK hynix ADR"],["RKLB","Rocket Lab"],["ETN","Eaton"],["SNDK","SanDisk"],["HPE","Hewlett Packard Enterprise"],["IONQ","IonQ"],["ZTS","Zoetis"],
+["SKHY","SK hynix ADR"],["RKLB","Rocket Lab"],["ETN","Eaton"],["SNDK","SanDisk"],["HPE","Hewlett Packard Enterprise"],["IONQ","IonQ"],["ZTS","Zoetis"],
 ["WDC","Western Digital"],["DELL","Dell Technologies"],["CSCO","Cisco Systems"],["DUK","Duke Energy"],["ANET","Arista Networks"]];
 
 const QUALITY={
-VTI:88,TSM:94,QQQM:90,META:93,MU:88,TEL:87,NVDA:95,AVGO:94,GEV:84,APH:91,NVT:80,AMAT:91,SOXQ:84,TTE:76,ALGM:73,LRCX:91,RTX:84,RMBS:70,BYDDY:82,CEG:86,VST:82,VRT:84,CRDO:75,GLO:62,FN:86,MELI:91,PYPL:76,KLAC:93,FLEX:78,AMD:88,NBIS:68,MRVL:82,CMI:84,CAT:88,EQT:78,HWM:88,ET:78,ONTO:84,SKYHV:89,RKLB:67,ETN:92,SNDK:74,HPE:73,IONQ:57,ZTS:88,WDC:76,DELL:80,CSCO:80,DUK:82,ANET:94
+VTI:88,TSM:94,QQQM:90,META:93,MU:88,TEL:87,NVDA:95,AVGO:94,GEV:84,APH:91,NVT:80,AMAT:91,SOXQ:84,TTE:76,ALGM:73,LRCX:91,RTX:84,RMBS:70,BYDDY:82,CEG:86,VST:82,VRT:84,CRDO:75,GLO:62,FN:86,MELI:91,PYPL:76,KLAC:93,FLEX:78,AMD:88,NBIS:68,MRVL:82,CMI:84,CAT:88,EQT:78,HWM:88,ET:78,ONTO:84,SKHY:89,RKLB:67,ETN:92,SNDK:74,HPE:73,IONQ:57,ZTS:88,WDC:76,DELL:80,CSCO:80,DUK:82,ANET:94
 };
 const VALUE={
-VTI:72,TSM:82,QQQM:62,META:78,MU:80,TEL:70,NVDA:55,AVGO:58,GEV:48,APH:47,NVT:66,AMAT:63,SOXQ:60,TTE:86,ALGM:68,LRCX:62,RTX:74,RMBS:58,BYDDY:78,CEG:70,VST:72,VRT:46,CRDO:34,GLO:76,FN:58,MELI:52,PYPL:84,KLAC:56,FLEX:80,AMD:50,NBIS:42,MRVL:50,CMI:76,CAT:61,EQT:84,HWM:48,ET:88,ONTO:62,SKYHV:90,RKLB:32,ETN:57,SNDK:55,HPE:82,IONQ:24,ZTS:72,WDC:74,DELL:74,CSCO:82,DUK:78,ANET:43
+VTI:72,TSM:82,QQQM:62,META:78,MU:80,TEL:70,NVDA:55,AVGO:58,GEV:48,APH:47,NVT:66,AMAT:63,SOXQ:60,TTE:86,ALGM:68,LRCX:62,RTX:74,RMBS:58,BYDDY:78,CEG:70,VST:72,VRT:46,CRDO:34,GLO:76,FN:58,MELI:52,PYPL:84,KLAC:56,FLEX:80,AMD:50,NBIS:42,MRVL:50,CMI:76,CAT:61,EQT:84,HWM:48,ET:88,ONTO:62,SKHY:90,RKLB:32,ETN:57,SNDK:55,HPE:82,IONQ:24,ZTS:72,WDC:74,DELL:74,CSCO:82,DUK:78,ANET:43
 };
+const RATINGS_UPDATED="July 15, 2026";
 
 const $=id=>document.getElementById(id);
 let watch=JSON.parse(localStorage.getItem("steveWatchV3")||"null")||ORIGINAL.map(x=>({symbol:x[0],name:x[1]}));
 let data=JSON.parse(localStorage.getItem("steveDataV5")||"{}");
 let alerts=JSON.parse(localStorage.getItem("steveAlertsV2")||"{}");
-let chartCache={},openCharts=JSON.parse(localStorage.getItem("steveOpenCharts")||"{}"),view="all",stopped=false,refreshing=false,autoTimer=null;
+let chartCache={},openCharts=JSON.parse(localStorage.getItem("steveOpenCharts")||"{}"),view="all",stopped=false,refreshing=false,autoTimer=null,finnhubCooldownUntil=0;
 const AUTO_REFRESH_MS=5*60*1000;
 $("apiKey").value=localStorage.getItem("finnhubKey")||"";
 function save(){localStorage.setItem("steveWatchV3",JSON.stringify(watch));localStorage.setItem("steveDataV5",JSON.stringify(data));localStorage.setItem("steveAlertsV2",JSON.stringify(alerts));localStorage.setItem("steveOpenCharts",JSON.stringify(openCharts))}
@@ -123,16 +125,18 @@ function marketSession(){
  return{key:"closed",label:"Market closed"};
 }
 function updateMarketBadge(){const m=marketSession(),b=$("marketBadge");b.textContent=m.label;b.className="marketbadge "+(m.key==="open"?"open":(["premarket","afterhours"].includes(m.key)?"extended":""))}
-function yahooSymbol(s){return({SKYHV:"000660.KS"})[s]||s}
+function yahooSymbol(s){return s}
 function yahooUrls(path){const a=`https://query1.finance.yahoo.com${path}`,b=`https://query2.finance.yahoo.com${path}`;return[a,b,`https://corsproxy.io/?url=${encodeURIComponent(a)}`,`https://api.allorigins.win/raw?url=${encodeURIComponent(a)}`]}
 async function fetchJson(urls){
  let last;for(const url of urls){try{const c=new AbortController(),t=setTimeout(()=>c.abort(),15000);const r=await fetch(url,{signal:c.signal,cache:"no-store"});clearTimeout(t);if(!r.ok)throw Error(`HTTP ${r.status}`);return await r.json()}catch(e){last=e}}
  throw last||Error("data unavailable");
 }
 async function getQuote(symbol,key){
+ if(Date.now()<finnhubCooldownUntil)throw Error("Finnhub cooldown active");
  const r=await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${encodeURIComponent(key)}`,{cache:"no-store"});
- if(!r.ok)throw Error("Finnhub quote failed");const q=await r.json();if(!q||!Number.isFinite(q.c)||q.c<=0)throw Error("No live quote");
- return{price:q.c,dayDollar:q.d,dayPct:q.dp,dayHigh:q.h,dayLow:q.l,prev:q.pc,quoteAt:Date.now()};
+ if(r.status===429){finnhubCooldownUntil=Date.now()+60*1000;throw Error("Finnhub rate limited — cooling down for 60 seconds");}
+ if(!r.ok)throw Error(`Finnhub HTTP ${r.status}`);const q=await r.json();if(!q||!Number.isFinite(q.c)||q.c<=0)throw Error("No live quote");
+ return{price:q.c,dayDollar:q.d,dayPct:q.dp,dayHigh:q.h,dayLow:q.l,prev:q.pc,quoteAt:Date.now(),priceSource:"Finnhub live"};
 }
 async function getYear(symbol){
  const y=yahooSymbol(symbol),path=`/v8/finance/chart/${encodeURIComponent(y)}?period1=${yearStartUnix()}&period2=${unix(new Date())}&interval=1d&events=history`;
@@ -142,14 +146,14 @@ async function getYear(symbol){
  const anchor=Number.isFinite(res.meta?.regularMarketPrice)?res.meta.regularMarketPrice:lr,scale=Number.isFinite(anchor)&&Number.isFinite(la)&&la!==0?anchor/la:1,rows=[];
  for(let i=0;i<raw.length;i++){if(!Number.isFinite(raw[i]))continue;const close=Number.isFinite(adj[i])?adj[i]*scale:raw[i],factor=raw[i]!==0?close/raw[i]:1;rows.push({close,high:Number.isFinite(q.high?.[i])?q.high[i]*factor:close,low:Number.isFinite(q.low?.[i])?q.low[i]*factor:close})}
  if(!rows.length)throw Error("No history rows");const closes=rows.map(r=>r.close);
- return{historyPrice:closes.at(-1),yearHigh:Math.max(...rows.map(r=>r.high)),yearLow:Math.min(...rows.map(r=>r.low)),yearAvg:closes.reduce((a,b)=>a+b,0)/closes.length,yearFirst:closes[0],yearAt:Date.now()};
+ return{historyPrice:closes.at(-1),yearHigh:Math.max(...rows.map(r=>r.high)),yearLow:Math.min(...rows.map(r=>r.low)),yearAvg:closes.reduce((a,b)=>a+b,0)/closes.length,yearFirst:closes[0],yearAt:Date.now(),historySource:"Yahoo history"};
 }
 async function getExtended(symbol){
  const y=yahooSymbol(symbol),path=`/v8/finance/chart/${encodeURIComponent(y)}?range=1d&interval=5m&includePrePost=true&events=history`;
  const j=await fetchJson(yahooUrls(path)),res=j?.chart?.result?.[0];if(!res)throw Error("No extended quote");
  const m=res.meta||{},close=res.indicators?.quote?.[0]?.close||[];let last=null;for(let i=close.length-1;i>=0;i--)if(Number.isFinite(close[i])){last=close[i];break}
  const session=marketSession().key,ext=session==="premarket"?(m.preMarketPrice??last):session==="afterhours"?(m.postMarketPrice??last):null;
- return{extendedPrice:Number.isFinite(ext)?ext:null,regularPrice:Number.isFinite(m.regularMarketPrice)?m.regularMarketPrice:null,extendedSession:session,extendedAt:Date.now()};
+ return{extendedPrice:Number.isFinite(ext)?ext:null,regularPrice:Number.isFinite(m.regularMarketPrice)?m.regularMarketPrice:null,extendedSession:session,extendedAt:Date.now(),extendedSource:"Yahoo extended"};
 }
 async function getChart(symbol,range="3mo"){
  const y=yahooSymbol(symbol),interval=range==="1d"?"5m":"1d",path=`/v8/finance/chart/${encodeURIComponent(y)}?range=${range}&interval=${interval}&includePrePost=${range==="1d"?"true":"false"}&events=history`;
@@ -232,23 +236,24 @@ function calculated(x){
  return{...x,price,belowHigh,aboveLow,ytd,vsAvg,range,quality,value,opportunity,oppReasons,oppWarnings,alert:a,hitLow,hitHigh};
 }
 function label(x){if(!Number.isFinite(x.belowHigh))return"Year range unavailable";const d=Math.abs(x.belowHigh);return d<=3?"Near 2026 high":d<=10?"Small pullback":d<=20?"Moderate pullback":"Deep pullback"}
-function allRows(){
- const q=$("search").value.trim().toLowerCase();let a=watch.map(w=>calculated({...w,...(data[w.symbol]||{})}));
+function allRows(baseRows){
+ const q=$("search").value.trim().toLowerCase();let a=[...(baseRows||watch.map(w=>calculated({...w,...(data[w.symbol]||{})})))];
  if(q)a=a.filter(x=>x.symbol.toLowerCase().includes(q)||x.name.toLowerCase().includes(q));
  if(view==="opportunities")a=a.filter(x=>Number.isFinite(x.opportunity));if(view==="gainers")a=a.filter(x=>x.dayPct>0);if(view==="losers")a=a.filter(x=>x.dayPct<0);if(view==="dips")a=a.filter(x=>Number.isFinite(x.belowHigh));
  if(view==="belowAvg")a=a.filter(x=>Number.isFinite(x.vsAvg)&&x.vsAvg<0);if(view==="nearHigh")a=a.filter(x=>Number.isFinite(x.belowHigh)&&x.belowHigh>=-5);
  if(view==="alerts")a=a.filter(x=>Number.isFinite(x.alert?.below)||Number.isFinite(x.alert?.above));
  const sorters={opportunity:(a,b)=>(b.opportunity??-9999)-(a.opportunity??-9999),dayDesc:(a,b)=>(b.dayPct??-9999)-(a.dayPct??-9999),dayAsc:(a,b)=>(a.dayPct??9999)-(b.dayPct??9999),dipDesc:(a,b)=>(a.belowHigh??9999)-(b.belowHigh??9999),belowAvg:(a,b)=>(a.vsAvg??9999)-(b.vsAvg??9999),nearLow:(a,b)=>(a.aboveLow??9999)-(b.aboveLow??9999),ytdDesc:(a,b)=>(b.ytd??-9999)-(a.ytd??-9999),ytdAsc:(a,b)=>(a.ytd??9999)-(b.ytd??9999),symbol:(a,b)=>a.symbol.localeCompare(b.symbol)};
  a.sort(sorters[$("sort").value]);
- if($("sort").value==="opportunity"||view==="opportunities")a.forEach((x,i)=>x.opportunityRank=i+1);
+ if($("sort").value==="opportunity"||view==="opportunities")a=a.map((x,i)=>({...x,opportunityRank:i+1}));
  return a;
 }
 function mini(items){return items.length?items.slice(0,5).map(x=>`<div class="mini"><div><span class="ticker">${x.symbol}</span><div class="name">${x.name}</div></div><b class="${cls(x.dayPct)}">${pct(x.dayPct)}</b></div>`).join(""):'<div class="name">Waiting for data…</div>'}
 function alertText(x){const p=[];if(Number.isFinite(x.alert?.below))p.push(`At/below $${num(x.alert.below)}`);if(Number.isFinite(x.alert?.above))p.push(`At/above $${num(x.alert.above)}`);return p.length?`${x.hitLow?"⚠ Low alert reached • ":x.hitHigh?"✓ High alert reached • ":""}${p.join(" • ")}`:"No visual alert set"}
 function render(){
- const all=watch.map(w=>calculated({...w,...(data[w.symbol]||{})})).filter(x=>Number.isFinite(x.dayPct));
+ const calculatedAll=watch.map(w=>calculated({...w,...(data[w.symbol]||{})}));
+ const all=calculatedAll.filter(x=>Number.isFinite(x.dayPct));
  $("gainers").innerHTML=mini([...all].sort((a,b)=>b.dayPct-a.dayPct));$("losers").innerHTML=mini([...all].sort((a,b)=>a.dayPct-b.dayPct));
- const rows=allRows();$("list").innerHTML=rows.length?rows.map(x=>`
+ const rows=allRows(calculatedAll);$("list").innerHTML=rows.length?rows.map(x=>`
  <article class="stock ${x.hitLow?"alert-low":""} ${x.hitHigh?"alert-high":""}">
  <div class="stock-top"><div><a href="https://finance.yahoo.com/quote/${encodeURIComponent(yahooSymbol(x.symbol))}" target="_blank" rel="noopener"><div class="symbol">${Number.isFinite(x.opportunityRank)?`<span class="rankbadge">#${x.opportunityRank}</span>`:""}${x.symbol}</div><div class="company">${x.name}</div></a></div>
  <div><div class="price">${Number.isFinite(x.price)?"$"+num(x.price):"—"}</div><div class="day ${cls(x.dayPct)}">${pct(x.dayPct)}${Number.isFinite(x.dayDollar)?` • ${x.dayDollar>=0?"+":""}$${num(x.dayDollar)}`:""}</div>
@@ -263,9 +268,9 @@ function render(){
  <div class="metric"><div class="label">2026 gain/loss</div><div class="value ${cls(x.ytd)}">${pct(x.ytd)}</div></div>
  <div class="metric"><div class="label">Range position</div><div class="value">${Number.isFinite(x.range)?num(x.range,0)+"%":"—"}</div></div><div class="metric"><div class="label">Opportunity score</div><div class="value ${Number.isFinite(x.opportunity)&&x.opportunity>=72?"pos":Number.isFinite(x.opportunity)&&x.opportunity<48?"neg":""}">${Number.isFinite(x.opportunity)?num(x.opportunity,0)+"/100":"—"}</div></div>
  </div>
- ${Number.isFinite(x.opportunity)?`<div class="oppwhy"><b>Why it ranks here:</b> ${x.oppReasons.length?x.oppReasons.slice(0,4).join(" • "):"mixed setup"}${x.oppWarnings.length?`<br><span class="neg">Caution: ${x.oppWarnings.join(" • ")}</span>`:""}</div>`:""}
+ ${Number.isFinite(x.opportunity)?`<div class="oppwhy"><b>Why it ranks here:</b> ${x.oppReasons.length?x.oppReasons.slice(0,4).join(" • "):"mixed setup"}${x.oppWarnings.length?`<br><span class="neg">Caution: ${x.oppWarnings.join(" • ")}</span>`:""}<br><span class="name">Quality/value ratings updated ${RATINGS_UPDATED}.</span></div>`:""}
  <div class="rangebar"><div class="rangefill" style="width:${Number.isFinite(x.range)?x.range:0}%"></div></div>
- <div class="bottom"><div><span class="tag">${label(x)}${Number.isFinite(x.range)?` • ${num(x.range,0)}% up range`:""}</span><div class="alerttext ${x.hitLow||x.hitHigh?"alert-hit":""}">${alertText(x)}</div></div>
+ <div class="bottom"><div><span class="tag">${label(x)}${Number.isFinite(x.range)?` • ${num(x.range,0)}% up range`:""}</span><div class="alerttext ${x.hitLow||x.hitHigh?"alert-hit":""}">${alertText(x)}${Number.isFinite(x.quoteAt)?` • Live quote ${new Date(x.quoteAt).toLocaleTimeString()}`:Number.isFinite(x.yearAt)?` • Cached/history ${new Date(x.yearAt).toLocaleDateString()}`:""}</div></div>
  <div class="actions"><button class="chartbtn" onclick="toggleChart('${x.symbol}')">Chart</button><button class="alertbtn" onclick="setAlert('${x.symbol}')">Alert</button><button class="remove" onclick="removeStock('${x.symbol}')">Remove</button></div></div>
  <div id="chart-${x.symbol}" class="chartpanel ${openCharts[x.symbol]?"open":""}"><div class="charthead"><span class="charttitle">${x.symbol} chart</span><div class="charttabs">
  <button class="${(openCharts[x.symbol]?.range||"3mo")==="1d"?"active":""}" onclick="loadChart('${x.symbol}','1d',this)">1D</button><button class="${(openCharts[x.symbol]?.range||"3mo")==="1mo"?"active":""}" onclick="loadChart('${x.symbol}','1mo',this)">1M</button><button class="${(openCharts[x.symbol]?.range||"3mo")==="3mo"?"active":""}" onclick="loadChart('${x.symbol}','3mo',this)">3M</button><button class="${(openCharts[x.symbol]?.range||"3mo")==="1y"?"active":""}" onclick="loadChart('${x.symbol}','1y',this)">1Y</button>
@@ -312,41 +317,65 @@ window.loadChart=async(s,range,btn)=>{
    note.textContent="Chart unavailable from the free feed right now.";
  }
 }
-function restoreOpenCharts(){
- requestAnimationFrame(()=>{
-   Object.entries(openCharts).forEach(([s,state])=>{
-     const p=$(`chart-${s}`);
-     if(!p)return;
-     p.classList.add("open");
-     const range=state?.range||"3mo";
-     const label={"1d":"1D","1mo":"1M","3mo":"3M","1y":"1Y"}[range];
-     const btn=[...p.querySelectorAll(".charttabs button")].find(b=>b.textContent.trim()===label);
-     loadChart(s,range,btn);
-   });
- });
+async function restoreOpenCharts(){
+ await new Promise(requestAnimationFrame);
+ for(const [s,state] of Object.entries(openCharts)){
+   const p=$(`chart-${s}`);
+   if(!p)continue;
+   p.classList.add("open");
+   const range=state?.range||"3mo";
+   const label={"1d":"1D","1mo":"1M","3mo":"3M","1y":"1Y"}[range];
+   const btn=[...p.querySelectorAll(".charttabs button")].find(b=>b.textContent.trim()===label);
+   await loadChart(s,range,btn);
+   await sleep(300);
+ }
 }
 function drawChart(canvas,pts){const r=canvas.getBoundingClientRect(),d=window.devicePixelRatio||1;canvas.width=Math.max(300,r.width*d);canvas.height=Math.max(160,r.height*d);const c=canvas.getContext("2d");c.setTransform(d,0,0,d,0,0);const w=r.width,h=r.height,p=18,v=pts.map(x=>x.v),min=Math.min(...v),max=Math.max(...v),span=max-min||1;c.clearRect(0,0,w,h);c.strokeStyle="#29323e";c.lineWidth=1;c.beginPath();for(let i=0;i<4;i++){const y=p+(h-p*2)*i/3;c.moveTo(p,y);c.lineTo(w-p,y)}c.stroke();c.strokeStyle=v.at(-1)>=v[0]?"#21d765":"#ff6257";c.lineWidth=2;c.beginPath();pts.forEach((x,i)=>{const xx=p+(w-p*2)*i/(pts.length-1),yy=h-p-(x.v-min)/span*(h-p*2);i?c.lineTo(xx,yy):c.moveTo(xx,yy)});c.stroke();c.fillStyle="#9ba8b7";c.font="11px -apple-system";c.fillText(`$${num(max)}`,2,12);c.fillText(`$${num(min)}`,2,h-4)}
 async function refresh(){
- if(refreshing)return;refreshing=true;stopped=false;$("refresh").disabled=true;const key=$("apiKey").value.trim();let ok=0,fail=0,quoteOk=0,quoteFail=0;
+ if(refreshing)return;refreshing=true;stopped=false;$("refresh").disabled=true;const key=$("apiKey").value.trim();let ok=0,fail=0,quoteOk=0,quoteFail=0,rateLimited=false;
  try{
   for(let i=0;i<watch.length;i++){if(stopped)break;const s=watch[i].symbol,old=data[s]||{},merged={...old};$("status").textContent=`Loading ${i+1} of ${watch.length}: ${s}`;let loaded=false;
-   if(key){try{Object.assign(merged,await getQuote(s,key));quoteOk++;loaded=true}catch(e){quoteFail++}}
+   if(key){try{Object.assign(merged,await getQuote(s,key));quoteOk++;loaded=true}catch(e){quoteFail++;if(String(e.message||e).includes("rate limited")||String(e.message||e).includes("cooldown"))rateLimited=true}}
    const session=marketSession().key;if(["premarket","afterhours"].includes(session)&&(!old.extendedAt||Date.now()-old.extendedAt>10*60*1000)){try{Object.assign(merged,await getExtended(s))}catch(e){}}
    const needYear=!old.yearAt||Date.now()-old.yearAt>24*60*60*1000;if(needYear){try{Object.assign(merged,await getYear(s));if(!loaded&&Number.isFinite(merged.historyPrice)){merged.price=merged.historyPrice;loaded=true}}catch(e){}}else if(!loaded&&Number.isFinite(merged.historyPrice)){merged.price=merged.historyPrice;loaded=true}
    data[s]=merged;loaded?ok++:fail++;save();render();await sleep(needYear?1200:350);
   }
-  $("status").textContent=stopped?`Stopped. ${ok} stocks loaded.`:`Updated ${new Date().toLocaleTimeString()}. ${ok} loaded; ${fail} unavailable.${key?` Live Finnhub quotes: ${quoteOk}${quoteFail?`; failures: ${quoteFail}`:""}.`:" Add a Finnhub key for live quotes."} Auto-refreshes every 5 minutes.`;
+  $("status").textContent=stopped?`Stopped • ${ok}/${watch.length} loaded`:`Last updated ${new Date().toLocaleTimeString()} • ${ok}/${watch.length} loaded • ${fail} unavailable${key?` • Finnhub live: ${quoteOk}${quoteFail?` • quote failures: ${quoteFail}`:""}`:" • Add a Finnhub key for live quotes"}${rateLimited?" • Finnhub cooldown active":""} • Auto-refresh: 5 min`;
  }finally{$("refresh").disabled=false;refreshing=false;updateMarketBadge()}
 }
 window.removeStock=s=>{watch=watch.filter(x=>x.symbol!==s);delete data[s];delete alerts[s];delete openCharts[s];save();render()}
-$("refresh").onclick=refresh;$("stop").onclick=()=>stopped=true;$("search").oninput=render;$("sort").onchange=render;
+$("refresh").onclick=refresh;$("stop").onclick=()=>stopped=true;let searchTimer;$("search").oninput=()=>{clearTimeout(searchTimer);searchTimer=setTimeout(render,180)};$("sort").onchange=render;
 document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{document.querySelectorAll(".tabs button").forEach(x=>x.classList.remove("active"));b.classList.add("active");view=b.dataset.view;if(view==="opportunities")$("sort").value="opportunity";if(view==="gainers")$("sort").value="dayDesc";if(view==="losers")$("sort").value="dayAsc";if(view==="dips"||view==="nearHigh")$("sort").value="dipDesc";if(view==="belowAvg")$("sort").value="belowAvg";render()});
 $("saveKey").onclick=()=>{localStorage.setItem("finnhubKey",$("apiKey").value.trim());$("status").textContent="Finnhub key saved on this device."}
 $("add").onclick=()=>{const s=$("newTicker").value.trim().toUpperCase().replace(/\s/g,"");if(s&&!watch.some(x=>x.symbol===s)){watch.push({symbol:s,name:s});save();render()}$("newTicker").value=""}
+
+$("export").onclick=()=>{
+ const payload={version:1,exportedAt:new Date().toISOString(),watchlist:watch,alerts,openCharts,settings:{sort:$("sort").value}};
+ const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
+ const url=URL.createObjectURL(blob),a=document.createElement("a");
+ a.href=url;a.download=`steves-stock-board-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();
+ setTimeout(()=>URL.revokeObjectURL(url),1000);
+ $("status").textContent="Board backup downloaded.";
+};
+$("import").onclick=()=>$("importFile").click();
+$("importFile").onchange=async e=>{
+ const file=e.target.files?.[0];if(!file)return;
+ try{
+   const obj=JSON.parse(await file.text());
+   if(!Array.isArray(obj.watchlist))throw Error("Invalid backup file");
+   watch=obj.watchlist.map(x=>({symbol:String(x.symbol||"").toUpperCase(),name:String(x.name||x.symbol||"")})).filter(x=>x.symbol);
+   alerts=obj.alerts&&typeof obj.alerts==="object"?obj.alerts:{};
+   openCharts=obj.openCharts&&typeof obj.openCharts==="object"?obj.openCharts:{};
+   if(obj.settings?.sort&&[...$("sort").options].some(o=>o.value===obj.settings.sort))$("sort").value=obj.settings.sort;
+   save();render();restoreOpenCharts();$("status").textContent=`Board restored • ${watch.length} stocks loaded from backup.`;
+ }catch(err){alert("That backup file could not be restored.");}
+ finally{e.target.value="";}
+};
 $("reset").onclick=()=>{if(confirm("Restore the original 50-stock list?")){watch=ORIGINAL.map(x=>({symbol:x[0],name:x[1]}));data={};alerts={};openCharts={};save();render();refresh()}}
 function startAuto(){if(autoTimer)clearInterval(autoTimer);autoTimer=setInterval(()=>{if(!document.hidden)refresh()},AUTO_REFRESH_MS)}
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)refresh()});
-updateMarketBadge();setInterval(updateMarketBadge,60000);render();startAuto();setTimeout(refresh,400);
+document.addEventListener("keydown",e=>{if(e.key==="/"&&!/input|select|textarea/i.test(document.activeElement?.tagName)){e.preventDefault();$("search").focus()}if((e.key==="r"||e.key==="R")&&!/input|select|textarea/i.test(document.activeElement?.tagName))refresh()});
+updateMarketBadge();setInterval(updateMarketBadge,60000);render();restoreOpenCharts();startAuto();setTimeout(refresh,400);
 </script>
 </body>
 </html>
