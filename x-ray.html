@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#07090c">
 <meta name="description" content="Steve's Stock X-Ray — valuation, fundamentals, news, analyst ratings and an explained research score.">
-<title>Steve's Stock X-Ray 5.0</title>
+<title>Steve's Stock X-Ray 5.1</title>
 <style>
 :root{
   --bg:#07090c;--panel:#11161d;--panel2:#171e27;--text:#f5f7fa;--muted:#9ba8b7;
@@ -20,7 +20,7 @@ h1{font-size:24px;margin:0}.sub{font-size:12px;color:var(--muted);margin-top:3px
 main{max-width:1120px;margin:auto;padding:12px 12px 50px}
 .searchbar{display:grid;grid-template-columns:1fr auto;gap:8px}
 input,button{border:1px solid var(--line);border-radius:11px;background:var(--panel);color:var(--text);padding:12px}
-button{font-weight:800;cursor:pointer}.primary{background:#173b63;border-color:#2d73b7}
+button{font-weight:800;cursor:pointer;min-height:44px}.primary{background:#173b63;border-color:#2d73b7}
 .status{min-height:34px;margin:8px 2px;color:var(--muted);font-size:13px;line-height:1.4}
 .hero{display:grid;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px}
 .heroTop{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start}
@@ -66,7 +66,7 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
 </head>
 <body>
 <header>
-  <div class="headerline"><div><h1>Steve's Stock X-Ray 5.0</h1><div class="sub">Decision-focused research with buy triggers, avoid triggers, personal rules and AI-infrastructure fit</div></div><button id="backBtn">Board</button></div>
+  <div class="headerline"><div><h1>Steve's Stock X-Ray 5.1</h1><div class="sub">Decision-focused research with buy triggers, avoid triggers, personal rules and AI-infrastructure fit</div></div><button id="backBtn">Board</button></div>
 </header>
 <main>
   <div class="searchbar">
@@ -239,6 +239,7 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
 <script>
 const $=id=>document.getElementById(id);
 const state={symbol:"",name:"",quote:{},profile:{},metrics:{},summary:{},recommendations:[],news:[],scores:{},confidence:0,overall:null,verdict:"",compare:null};
+let compareInProgress=false;
 $("apiKey").value=localStorage.getItem("finnhubKey")||"";
 const clamp=(v,a=0,b=100)=>Math.max(a,Math.min(b,v));
 const finite=v=>Number.isFinite(Number(v));
@@ -392,8 +393,16 @@ async function tryUrls(urls){
  let last;for(const u of urls){try{return await fetchTimeout(u)}catch(e){last=e}}throw last||Error("Unavailable");
 }
 async function finnhub(path,key){
- if(!key)throw Error("No Finnhub key");
- return fetchTimeout(`https://finnhub.io/api/v1/${path}${path.includes("?")?"&":"?"}token=${encodeURIComponent(key)}`);
+ if(!key)throw Error("Finnhub key missing");
+ const url=`https://finnhub.io/api/v1/${path}${path.includes("?")?"&":"?"}token=${encodeURIComponent(key)}`;
+ const c=new AbortController(),t=setTimeout(()=>c.abort(),14000);
+ try{
+  const r=await fetch(url,{signal:c.signal,cache:"no-store"});
+  if(r.status===401||r.status===403)throw Error("Finnhub key was rejected");
+  if(r.status===429)throw Error("Finnhub rate limit reached — try again shortly");
+  if(!r.ok)throw Error(`Finnhub HTTP ${r.status}`);
+  return await r.json();
+ }finally{clearTimeout(t)}
 }
 async function loadAll(symbol){
  const key=$("apiKey").value.trim();
@@ -558,7 +567,9 @@ function bullBearText(){
 
  if(!bull.length)bull.push("The available data does not produce a strong bull case yet.");
  if(!bear.length)bear.push("No major quantitative red flag was found, but price and execution risk remain.");
- const conclusion = state.overall>=72
+ const conclusion = !finite(state.overall)
+   ? "There is not enough dependable data to form a balanced conclusion yet."
+   : state.overall>=72
    ? `The evidence leans positive, but the best action is still price-sensitive. ${finite(d.pe)&&d.pe>40?"The company may be attractive while the entry price is only fair.":"The current mix of quality, growth and valuation is reasonably favorable."}`
    : state.overall>=58
    ? "The evidence is mixed. This looks more like a watchlist candidate than an urgent purchase."
@@ -839,6 +850,7 @@ $("saveNotesBtn").onclick=()=>{
 };
 $("clearNotesBtn").onclick=()=>{
  if(!state.symbol)return;
+ if(!confirm(`Clear saved notes for ${state.symbol}?`))return;
  localStorage.removeItem(`xrayNotes:${state.symbol}`);
  $("myNotes").value="";
  $("status").textContent=`Notes cleared for ${state.symbol}.`;
@@ -854,6 +866,8 @@ $("compareBtn").onclick=async()=>{
  const other=$("compareTicker").value.trim().toUpperCase().replace(/\s/g,"");
  if(!state.symbol){$("status").textContent="Run the first X-Ray before comparing.";return}
  if(!other){$("status").textContent="Enter a comparison ticker.";return}
+ if(other===state.symbol){$("status").textContent="Choose a different ticker to compare.";return}
+ if(compareInProgress)return;compareInProgress=true;
  $("compareBtn").disabled=true;$("status").textContent=`Comparing ${state.symbol} with ${other}…`;
  try{
    const a=snapshot();
@@ -862,7 +876,7 @@ $("compareBtn").onclick=async()=>{
    $("status").textContent=`Comparison complete: ${state.symbol} versus ${other}.`;
  }catch(e){
    $("status").textContent=`Could not compare ${other}: ${e.message||e}`;
- }finally{$("compareBtn").disabled=false}
+ }finally{compareInProgress=false;$("compareBtn").disabled=false}
 };
 $("compareTicker").addEventListener("keydown",e=>{if(e.key==="Enter")$("compareBtn").click()});
 
