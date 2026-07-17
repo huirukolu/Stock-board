@@ -48,7 +48,7 @@ details{margin-top:16px;background:var(--panel);border:1px solid var(--line);bor
 <body>
 <header>
 <div class="headerline"><h1>Steve's Stock Board</h1><span id="marketBadge" class="marketbadge">Checking market…</span></div>
-<div class="sub">Live quotes • ranked opportunities • gainers and losers • charts • visual alerts</div>
+<div class="sub">Live quotes • ranked opportunities • tap any ticker for Stock X-Ray • charts • visual alerts</div>
 </header>
 <main>
 <div class="controls">
@@ -255,7 +255,7 @@ function render(){
  $("gainers").innerHTML=mini([...all].sort((a,b)=>b.dayPct-a.dayPct));$("losers").innerHTML=mini([...all].sort((a,b)=>a.dayPct-b.dayPct));
  const rows=allRows(calculatedAll);$("list").innerHTML=rows.length?rows.map(x=>`
  <article class="stock ${x.hitLow?"alert-low":""} ${x.hitHigh?"alert-high":""}">
- <div class="stock-top"><div><a href="https://finance.yahoo.com/quote/${encodeURIComponent(yahooSymbol(x.symbol))}" target="_blank" rel="noopener"><div class="symbol">${Number.isFinite(x.opportunityRank)?`<span class="rankbadge">#${x.opportunityRank}</span>`:""}${x.symbol}</div><div class="company">${x.name}</div></a></div>
+ <div class="stock-top"><div><a href="x-ray.html?ticker=${encodeURIComponent(x.symbol)}"><div class="symbol">${Number.isFinite(x.opportunityRank)?`<span class="rankbadge">#${x.opportunityRank}</span>`:""}${x.symbol}</div><div class="company">${x.name}</div></a></div>
  <div><div class="price">${Number.isFinite(x.price)?"$"+num(x.price):"—"}</div><div class="day ${cls(x.dayPct)}">${pct(x.dayPct)}${Number.isFinite(x.dayDollar)?` • ${x.dayDollar>=0?"+":""}$${num(x.dayDollar)}`:""}</div>
  ${Number.isFinite(x.extendedPrice)&&["premarket","afterhours"].includes(x.extendedSession)?`<div class="extended">${x.extendedSession==="premarket"?"Pre":"After"}: $${num(x.extendedPrice)}${Number.isFinite(x.regularPrice)?` (${pct((x.extendedPrice/x.regularPrice-1)*100)})`:""}</div>`:""}</div></div>
  <div class="metrics">
