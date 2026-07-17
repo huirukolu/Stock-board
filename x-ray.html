@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#07090c">
 <meta name="description" content="Steve's Stock X-Ray — valuation, fundamentals, news, analyst ratings and an explained research score.">
-<title>Steve's Stock X-Ray 5.1</title>
+<title>Steve's Stock X-Ray 5.2</title>
 <style>
 :root{
   --bg:#07090c;--panel:#11161d;--panel2:#171e27;--text:#f5f7fa;--muted:#9ba8b7;
@@ -66,7 +66,7 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
 </head>
 <body>
 <header>
-  <div class="headerline"><div><h1>Steve's Stock X-Ray 5.1</h1><div class="sub">Decision-focused research with buy triggers, avoid triggers, personal rules and AI-infrastructure fit</div></div><button id="backBtn">Board</button></div>
+  <div class="headerline"><div><h1>Steve's Stock X-Ray 5.2</h1><div class="sub">Decision-focused research with buy triggers, avoid triggers, personal rules and AI-infrastructure fit</div></div><button id="backBtn">Board</button></div>
 </header>
 <main>
   <div class="searchbar">
@@ -114,6 +114,15 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
       <div id="topDecisionSnapshot" class="metrics"></div>
       <div id="topAnalystNote" class="note" style="margin-top:9px"></div>
       <div id="topNewsHighlights" class="explain" style="margin-top:10px"></div>
+    </div>
+    <div class="card" style="padding:13px;margin-top:4px">
+      <h2 style="margin-bottom:10px">Confidence & conviction</h2>
+      <div id="confidenceSplit" class="metrics"></div>
+      <div id="convictionText" class="explain" style="margin-top:10px"></div>
+    </div>
+    <div class="card" style="padding:13px;margin-top:4px">
+      <h2 style="margin-bottom:10px">Why did the score change?</h2>
+      <div id="scoreChange" class="explain"></div>
     </div>
   </section>
 
@@ -232,13 +241,13 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
     <div class="settings">
       <input id="apiKey" type="password" placeholder="Finnhub API key">
       <button id="saveKey">Save Finnhub key on this device</button>
-      <div class="note">The X-Ray uses Finnhub for live quotes, company profiles, recommendations, company metrics and news when your plan allows them. It also tries Yahoo's public market-data endpoints through fallbacks for additional fundamentals. Free feeds sometimes omit fields or temporarily block browser requests; missing information is shown as unavailable rather than invented. The score automatically reduces confidence when data is incomplete.</div>
+      <div class="note">The X-Ray uses Finnhub for live quotes, company profiles, recommendations, company metrics and news when your plan allows them. It also tries Yahoo's public market-data endpoints through fallbacks for additional fundamentals. Free feeds sometimes omit fields or temporarily block browser requests; missing information is shown as unavailable rather than invented. The app separates data confidence (feed completeness) from investment confidence (clarity and consistency of the evidence).</div>
     </div>
   </details>
 </main>
 <script>
 const $=id=>document.getElementById(id);
-const state={symbol:"",name:"",quote:{},profile:{},metrics:{},summary:{},recommendations:[],news:[],scores:{},confidence:0,overall:null,verdict:"",compare:null};
+const state={symbol:"",name:"",quote:{},profile:{},metrics:{},summary:{},recommendations:[],news:[],scores:{},confidence:0,dataConfidence:0,investmentConfidence:0,overall:null,verdict:"",compare:null,industry:null};
 let compareInProgress=false;
 $("apiKey").value=localStorage.getItem("finnhubKey")||"";
 const clamp=(v,a=0,b=100)=>Math.max(a,Math.min(b,v));
@@ -311,31 +320,90 @@ function fairValueText(d){
 }
 
 function validPositive(v){return finite(v)&&Number(v)>0}
+function companyProfile(symbol,name){
+ const s=(symbol||"").toUpperCase(),n=(name||"").toLowerCase();
+ const profiles=[
+  [["NVDA"],"AI compute leader",100,"semiconductor",42],
+  [["AMD"],"AI compute challenger",90,"semiconductor",36],
+  [["TSM"],"Advanced foundry",98,"foundry",34],
+  [["AVGO"],"AI networking & custom silicon",95,"semiconductor",38],
+  [["MU","SKHY","WDC","SNDK"],"AI memory",92,"memory",28],
+  [["ANET"],"AI networking leader",93,"networking",42],
+  [["CSCO"],"Diversified AI networking",76,"networking",27],
+  [["CIEN","MRVL"],"AI networking",84,"networking",34],
+  [["APH","TEL","GLW"],"AI connectivity",88,"connectivity",34],
+  [["AMAT","LRCX","KLAC","ONTO","TER","ASML"],"AI semiconductor equipment",90,"equipment",34],
+  [["VRT"],"AI power & cooling",92,"power",38],
+  [["ETN","PWR","GEV"],"AI electrical infrastructure",88,"power",32],
+  [["CEG","VST"],"AI power generation",84,"utility",24],
+  [["CAT","CMI"],"Data-center backup power",72,"industrial",24],
+  [["MSFT"],"AI hyperscale platform",92,"hyperscaler",36],
+  [["AMZN"],"AI hyperscale platform",88,"hyperscaler",34],
+  [["GOOGL","GOOG"],"AI hyperscale platform",87,"hyperscaler",34],
+  [["META"],"AI compute platform",84,"hyperscaler",32],
+  [["ORCL"],"AI cloud infrastructure",82,"hyperscaler",30]
+ ];
+ for(const [arr,type,score,industry,preferredPE] of profiles)if(arr.includes(s))return{type,score,industry,preferredPE};
+ if(/memory/.test(n))return{type:"AI memory",score:88,industry:"memory",preferredPE:28};
+ if(/network|optical/.test(n))return{type:"AI networking",score:80,industry:"networking",preferredPE:32};
+ if(/connector|connectivity/.test(n))return{type:"AI connectivity",score:82,industry:"connectivity",preferredPE:32};
+ if(/semiconductor equipment/.test(n))return{type:"AI semiconductor equipment",score:86,industry:"equipment",preferredPE:32};
+ if(/power|electrical|energy infrastructure/.test(n))return{type:"AI power infrastructure",score:78,industry:"power",preferredPE:28};
+ if(/semiconductor|chip/.test(n))return{type:"AI chips",score:84,industry:"semiconductor",preferredPE:34};
+ if(/software|cloud/.test(n))return{type:"AI software / cloud",score:60,industry:"software",preferredPE:32};
+ return{type:"Broad / limited",score:30,industry:"general",preferredPE:28};
+}
 function buyBelowPrice(d){
- const vals=[];
- if(validPositive(d.target)) vals.push(d.target*.85);
- if(validPositive(d.roughValue)) vals.push(d.roughValue*.9);
- if(validPositive(d.price)&&finite(d.pe)&&d.pe>0) vals.push(d.price*Math.min(.95,35/d.pe));
- const usable=vals.filter(validPositive);
+ if(!validPositive(d.price))return null;
+ const profile=state.industry||companyProfile(state.symbol,state.name);
+ const candidates=[];
+ if(validPositive(d.target))candidates.push(d.target*.82);
+ if(validPositive(d.roughValue))candidates.push(d.roughValue*.85);
+ if(finite(d.pe)&&d.pe>0){
+   const targetPE=Math.min(40,profile.preferredPE||30);
+   candidates.push(d.price*Math.min(.92,targetPE/d.pe));
+ }
+ // Always demand a real margin of safety, never merely echo the current quote.
+ candidates.push(d.price*.92);
+ const usable=candidates.filter(validPositive);
  return usable.length?Math.min(...usable):null;
 }
-function aiExposure(symbol,name){
- const s=(symbol||"").toUpperCase(),n=(name||"").toLowerCase();
- const groups=[
-  [["MU","SKHY","WDC","SNDK"],"AI memory",92],
-  [["ANET","CSCO","CIEN","MRVL","APH","TEL","GLW"],"AI networking",85],
-  [["AMAT","LRCX","KLAC","ONTO","TER","ASML"],"AI equipment",88],
-  [["ETN","VRT","PWR","GEV","CEG","VST","CAT","CMI"],"AI power",82],
-  [["NVDA","AMD","TSM","INTC","AVGO","QCOM","ARM"],"AI chips",90],
-  [["META","MSFT","AMZN","GOOGL","GOOG","ORCL"],"AI compute platform",82]
- ];
- for(const [arr,type,score] of groups) if(arr.includes(s)) return {type,score};
- if(/memory/.test(n))return{type:"AI memory",score:92};
- if(/network|optical|connectivity/.test(n))return{type:"AI networking",score:85};
- if(/semiconductor equipment/.test(n))return{type:"AI equipment",score:88};
- if(/power|electrical|energy infrastructure/.test(n))return{type:"AI power",score:82};
- if(/semiconductor|chip/.test(n))return{type:"AI chips",score:90};
- return{type:"Broad / limited",score:30};
+function aiExposure(symbol,name){return companyProfile(symbol,name)}
+function industryPeScore(pe,profile){
+ if(!finite(pe)||pe<=0)return null;
+ const fair=profile?.preferredPE||28;
+ const ratio=pe/fair;
+ if(ratio<=.55)return 70;
+ if(ratio<=.8)return 90;
+ if(ratio<=1.05)return 100;
+ if(ratio<=1.25)return 82;
+ if(ratio<=1.55)return 58;
+ if(ratio<=2)return 30;
+ return 12;
+}
+function convictionLabel(score,investmentConfidence){
+ if(!finite(score))return{stars:"—",label:"Insufficient evidence"};
+ const adjusted=score*(.65+.35*(investmentConfidence/100));
+ if(adjusted>=80)return{stars:"★★★★★",label:"High conviction candidate"};
+ if(adjusted>=68)return{stars:"★★★★☆",label:"Good conviction"};
+ if(adjusted>=55)return{stars:"★★★☆☆",label:"Moderate conviction"};
+ if(adjusted>=42)return{stars:"★★☆☆☆",label:"Low conviction"};
+ return{stars:"★☆☆☆☆",label:"Speculative / avoid"};
+}
+function scoreHistoryKey(){return`xrayScoreHistory:${state.symbol}`}
+function scoreChangeSummary(){
+ if(!state.symbol||!finite(state.overall))return"Run an X-Ray with enough data to begin score tracking.";
+ let prev=null;try{prev=JSON.parse(localStorage.getItem(scoreHistoryKey())||"null")}catch(e){}
+ const current={score:Number(state.overall),at:Date.now(),pe:state.derived?.pe,revGrowth:state.derived?.revGrowth,analystUpside:state.derived?.analystUpside,belowHigh:state.derived?.belowHigh};
+ localStorage.setItem(scoreHistoryKey(),JSON.stringify(current));
+ if(!prev||!finite(prev.score))return"Baseline saved. On the next analysis, this section will explain what changed.";
+ const delta=current.score-Number(prev.score),reasons=[];
+ if(finite(current.pe)&&finite(prev.pe)){const x=current.pe-prev.pe;if(x<-1)reasons.push("valuation became more attractive");else if(x>1)reasons.push("valuation became less attractive")}
+ if(finite(current.revGrowth)&&finite(prev.revGrowth)){const x=current.revGrowth-prev.revGrowth;if(x>2)reasons.push("revenue growth improved");else if(x<-2)reasons.push("revenue growth slowed")}
+ if(finite(current.analystUpside)&&finite(prev.analystUpside)){const x=current.analystUpside-prev.analystUpside;if(x>3)reasons.push("analyst upside improved");else if(x<-3)reasons.push("analyst upside weakened")}
+ if(finite(current.belowHigh)&&finite(prev.belowHigh)){const x=current.belowHigh-prev.belowHigh;if(x<-3)reasons.push("the stock pulled back to a more attractive price");else if(x>3)reasons.push("the stock moved closer to its high")}
+ const sign=delta>0?"+":"";
+ return `${sign}${fmt(delta,1)} points since the prior saved analysis.${reasons.length?" Main drivers: "+reasons.join("; ")+".":" No single major driver was isolated from the available fields."}`;
 }
 function personalRules(d,analystCount,buyCount){
  return [
@@ -461,7 +529,8 @@ function compute(){
  const belowHigh=finite(price)&&finite(high52)?(price/high52-1)*100:null;
  const aboveLow=finite(price)&&finite(low52)?(price/low52-1)*100:null;
 
- const valuation=average([peScore(pe),peScore(fpe),scoreLinear(ps,12,2,true),scoreLinear(pb,12,2,true),scoreLinear(peg,3.5,.8,true)]);
+ state.industry=companyProfile(state.symbol,state.name);
+ const valuation=average([industryPeScore(pe,state.industry),industryPeScore(fpe,state.industry),scoreLinear(ps,12,2,true),scoreLinear(pb,12,2,true),scoreLinear(peg,3.5,.8,true)]);
  const growth=average([scoreLinear(revGrowth,-5,25),scoreLinear(epsGrowth,-10,30)]);
  const profitability=average([scoreLinear(grossMargin,15,65),scoreLinear(operatingMargin,5,35),scoreLinear(netMargin,3,25),scoreLinear(roe,5,30)]);
  const balance=average([scoreLinear(currentRatio,.7,2.2),debtScore(debtEquity),finite(cash)&&finite(debt)?scoreLinear(cash/debt,.15,1.25):null]);
@@ -487,19 +556,22 @@ function compute(){
  let weighted=0,w=0;for(const [k,v] of Object.entries(scores))if(finite(v)){weighted+=v*weights[k];w+=weights[k]}
  let overall=w?weighted/w:null;
  const available=Object.values(scores).filter(finite).length;
- const confidence=clamp(available/9*78 + (state.news.length?8:0) + (state.recommendations.length?7:0) + (state.profile.name?7:0));
+ const dataConfidence=clamp(available/9*78 + (state.news.length?8:0) + (state.recommendations.length?7:0) + (state.profile.name?7:0));
  if(finite(overall)){
    if(finite(pe)&&pe>70)overall-=6;
    if(finite(debtEquity)&&debtEquity>200)overall-=6;
    if(finite(revGrowth)&&revGrowth<0)overall-=5;
    overall=clamp(overall);
  }
- state.scores=scores;state.confidence=confidence;state.overall=overall;
+ const scoreSpread=Object.values(scores).filter(finite).map(Number);
+ const dispersion=scoreSpread.length?Math.max(...scoreSpread)-Math.min(...scoreSpread):100;
+ const investmentConfidence=clamp((finite(overall)?Math.abs(overall-50)*1.25:0)+(100-dispersion)*.35);
+ state.scores=scores;state.confidence=dataConfidence;state.dataConfidence=dataConfidence;state.investmentConfidence=investmentConfidence;state.overall=overall;
  const fairByTarget=target;
  const fairEstimate=fairByTarget;
  const marginOfSafety=finite(fairEstimate)&&finite(price)?(fairEstimate/price-1)*100:null;
  state.derived={price,pe,fpe,ps,pb,peg,revGrowth,epsGrowth,grossMargin,operatingMargin,netMargin,roe,currentRatio,debtEquity,fcf,cash,debt,ebitda,roic,ebitdaMargin,target,analystUpside,beta,high52,low52,belowHigh,aboveLow,dividendYield,payoutRatio,fairEstimate,marginOfSafety};
- state.verdict=verdict(overall,confidence);
+ state.verdict=verdict(overall,dataConfidence);
 }
 function recommendationScore(){
  const r=state.recommendations[0];if(!r)return null;
@@ -703,7 +775,7 @@ function render(){
  $("price").textContent=money(d.price);
  $("change").textContent=finite(q.dp)?`${pct(q.dp)} • ${q.d>=0?"+":""}${money(q.d)}`:"Price change unavailable";
  $("change").className="change "+(q.dp>0?"pos":q.dp<0?"neg":"flat");
- $("verdict").textContent=state.verdict;$("confidence").textContent=`Confidence ${fmt(state.confidence,0)}% • Updated ${new Date().toLocaleString()}`;
+ $("verdict").textContent=state.verdict;$("confidence").textContent=`Data confidence ${fmt(state.dataConfidence,0)}% • Updated ${new Date().toLocaleString()}`;
  $("score").textContent=finite(state.overall)?fmt(state.overall,0):"—";$("scoreRing").style.setProperty("--score",finite(state.overall)?state.overall:0);
  $("explain").innerHTML=buildNarrative();
  const pills=[];
@@ -735,7 +807,16 @@ function render(){
  $("ruleList").innerHTML=rules.map(x=>`${x[1]?"✓":"✕"} ${safe(x[0])}`).join("<br>");
  const ai=aiExposure(state.symbol,state.profile.name||state.profile.ticker||"");
  $("aiFit").innerHTML=[metric("Primary exposure",ai.type),metric("AI relevance",`${ai.score}/100`)].join("");
- $("aiFitNote").textContent=ai.type==="AI compute platform"?"Major builder and operator of AI data-center infrastructure, though not a pure picks-and-shovels supplier.":ai.score>=80?"Direct or strong picks-and-shovels exposure to AI infrastructure.":"AI exposure appears indirect or limited based on the company classification.";
+ $("aiFitNote").textContent=ai.industry==="hyperscaler"?"Major builder and operator of AI data-center infrastructure, though not a pure picks-and-shovels supplier.":ai.score>=88?"Direct, strategically important picks-and-shovels exposure to AI infrastructure.":ai.score>=70?"Meaningful AI infrastructure exposure, but it is one part of a broader business.":"AI exposure appears indirect or limited based on the company classification.";
+ const conviction=convictionLabel(state.overall,state.investmentConfidence);
+ $("confidenceSplit").innerHTML=[
+   metric("Data confidence",`${fmt(state.dataConfidence,0)}%`),
+   metric("Investment confidence",`${fmt(state.investmentConfidence,0)}%`),
+   metric("Conviction meter",conviction.stars),
+   metric("Industry lens",ai.industry.replace(/\b\w/g,c=>c.toUpperCase()))
+ ].join("");
+ $("convictionText").innerHTML=`<b>${safe(conviction.label)}</b><br>Data confidence measures how complete the feeds are. Investment confidence measures how clear and internally consistent the evidence is.`;
+ $("scoreChange").textContent=scoreChangeSummary();
  $("topDecisionSnapshot").innerHTML=[
    metric("SteveScore",finite(state.overall)?`${fmt(state.overall,0)}/100`:"Not available"),
    metric("X-Ray rating",clearVerdict),
@@ -864,7 +945,7 @@ $("clearNotesBtn").onclick=()=>{
 
 $("copyBtn").onclick=async()=>{
  const d=state.derived;
- const text=`${state.symbol} — ${state.name}\nSteveScore: ${finite(state.overall)?fmt(state.overall,0)+"/100":"Unavailable"}\nRating: ${state.verdict}\nPrice: ${money(d.price)}\nP/E: ${fmt(d.pe,1)}\nRevenue growth: ${pct(d.revGrowth)}\nAnalyst target: ${money(d.target)}\nConfidence: ${fmt(state.confidence,0)}%\n\n${$("explain").innerText}`;
+ const text=`${state.symbol} — ${state.name}\nSteveScore: ${finite(state.overall)?fmt(state.overall,0)+"/100":"Unavailable"}\nRating: ${state.verdict}\nPrice: ${money(d.price)}\nP/E: ${fmt(d.pe,1)}\nRevenue growth: ${pct(d.revGrowth)}\nAnalyst target: ${money(d.target)}\nData confidence: ${fmt(state.dataConfidence,0)}% • Investment confidence: ${fmt(state.investmentConfidence,0)}%\n\n${$("explain").innerText}`;
  try{await navigator.clipboard.writeText(text);$("status").textContent="X-Ray summary copied."}catch(e){$("status").textContent="Copy was blocked by this browser."}
 };
 
