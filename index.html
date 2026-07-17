@@ -286,6 +286,72 @@ function render(){
  </div></div><div class="chartwrap"><canvas id="canvas-${x.symbol}"></canvas></div><div id="chartnote-${x.symbol}" class="chartnote">Tap a period to change the chart.</div></div>
  </article>`).join(""):'<div class="empty">No stocks match this view.</div>';
 }
+window.toggleChart=async s=>{
+ const p=$(`chart-${s}`);
+ const opening=!p.classList.contains("open");
+ if(opening){
+   openCharts[s]=openCharts[s]||{range:"3mo"};
+   p.classList.add("open");
+   save();
+   const range=openCharts[s].range||"3mo";
+   const btn=[...p.querySelectorAll(".charttabs button")].find(b=>b.textContent.trim().toLowerCase()===({"1d":"1d","1mo":"1m","3mo":"3m","1y":"1y"}[range]));
+   await loadChart(s,range,btn);
+ }else{
+   delete openCharts[s];
+   p.classList.remove("open");
+   save();
+ }
+}
+window.loadChart=async(s,range,btn)=>{
+ const p=$(`chart-${s}`);
+ if(!p)return;
+ openCharts[s]={range};
+ save();
+ p.classList.add("open");
+ p.querySelectorAll(".charttabs button").forEach(b=>b.classList.remove("active"));
+ btn?.classList.add("active");
+ const note=$(`chartnote-${s}`);
+ note.textContent="Loading chart…";
+ try{
+   const k=`${s}:${range}`;
+   let pts=chartCache[k];
+   if(!pts){pts=await getChart(s,range);chartCache[k]=pts}
+   const canvas=$(`canvas-${s}`);
+   if(!canvas)return;
+   drawChart(canvas,pts);
+   const f=pts[0].v,l=pts.at(-1).v;
+   note.textContent=`${range.toUpperCase()} change: ${pct((l/f-1)*100)} • Low $${num(Math.min(...pts.map(p=>p.v)))} • High $${num(Math.max(...pts.map(p=>p.v)))}`;
+ }catch(e){
+   note.textContent="Chart unavailable from the free feed right now.";
+ }
+}
+async function restoreOpenCharts(){
+ await new Promise(requestAnimationFrame);
+ for(const [s,state] of Object.entries(openCharts)){
+   const p=$(`chart-${s}`);
+   if(!p)continue;
+   p.classList.add("open");
+   const range=state?.range||"3mo";
+   const label={"1d":"1D","1mo":"1M","3mo":"3M","1y":"1Y"}[range];
+   const btn=[...p.querySelectorAll(".charttabs button")].find(b=>b.textContent.trim()===label);
+   await loadChart(s,range,btn);
+   await sleep(300);
+ }
+}
+function drawChart(canvas,pts){const r=canvas.getBoundingClientRect(),d=window.devicePixelRatio||1;canvas.width=Math.max(300,r.width*d);canvas.height=Math.max(160,r.height*d);const c=canvas.getContext("2d");c.setTransform(d,0,0,d,0,0);const w=r.width,h=r.height,p=18,v=pts.map(x=>x.v),min=Math.min(...v),max=Math.max(...v),span=max-min||1;c.clearRect(0,0,w,h);c.strokeStyle="#29323e";c.lineWidth=1;c.beginPath();for(let i=0;i<4;i++){const y=p+(h-p*2)*i/3;c.moveTo(p,y);c.lineTo(w-p,y)}c.stroke();c.strokeStyle=v.at(-1)>=v[0]?"#21d765":"#ff6257";c.lineWidth=2;c.beginPath();pts.forEach((x,i)=>{const xx=p+(w-p*2)*i/(pts.length-1),yy=h-p-(x.v-min)/span*(h-p*2);i?c.lineTo(xx,yy):c.moveTo(xx,yy)});c.stroke();c.fillStyle="#9ba8b7";c.font="11px -apple-system";c.fillText(`$${num(max)}`,2,12);c.fillText(`$${num(min)}`,2,h-4)}
+async function refresh(){
+ if(refreshing)return;refreshing=true;stopped=false;$("refresh").disabled=true;const key=$("apiKey").value.trim();let ok=0,fail=0,quoteOk=0,quoteFail=0,rateLimited=false;
+ try{
+  for(let i=0;i<watch.length;i++){if(stopped)break;const s=watch[i].symbol,old=data[s]||{},merged={...old};$("status").textContent=`Loading ${i+1} of ${watch.length}: ${s}`;let loaded=false;
+   if(key){try{Object.assign(merged,await getQuote(s,key));quoteOk++;loaded=true}catch(e){quoteFail++;if(String(e.message||e).includes("rate limited")||String(e.message||e).includes("cooldown"))rateLimited=true}}
+   const session=marketSession().key;if(["premarket","afterhours"].includes(session)&&(!old.extendedAt||Date.now()-old.extendedAt>10*60*1000)){try{Object.assign(merged,await getExtended(s))}catch(e){}}
+   const needYear=!old.yearAt||Date.now()-old.yearAt>24*60*60*1000;if(needYear){try{Object.assign(merged,await getYear(s));if(!loaded&&Number.isFinite(merged.historyPrice)){merged.price=merged.historyPrice;loaded=true}}catch(e){}}else if(!loaded&&Number.isFinite(merged.historyPrice)){merged.price=merged.historyPrice;loaded=true}
+   data[s]=merged;loaded?ok++:fail++;save();render();await sleep(needYear?1200:350);
+  }
+  $("status").textContent=stopped?`Stopped • ${ok}/${watch.length} loaded`:`Last updated ${new Date().toLocaleTimeString()} • ${ok}/${watch.length} loaded • ${fail} unavailable${key?` • Finnhub live: ${quoteOk}${quoteFail?` • quote failures: ${quoteFail}`:""}`:" • Add a Finnhub key for live quotes"}${rateLimited?" • Finnhub cooldown active":""} • Auto-refresh: 5 min`;
+ }finally{$("refresh").disabled=false;refreshing=false;updateMarketBadge()}
+}
+
 window.setAlert=s=>{const a=alerts[s]||{},lowInput=prompt(`${s}: highlight at or below this price. Blank clears it.`,Number.isFinite(a.below)?a.below:"");if(lowInput===null)return;const highInput=prompt(`${s}: highlight at or above this price. Blank clears it.`,Number.isFinite(a.above)?a.above:"");if(highInput===null)return;const b=lowInput.trim()===""?null:Number(lowInput),h=highInput.trim()===""?null:Number(highInput);if((b!==null&&(!Number.isFinite(b)||b<=0))||(h!==null&&(!Number.isFinite(h)||h<=0))){alert("Alert prices must be positive numbers.");return}if(b!==null&&h!==null&&b>=h){alert("The lower alert must be below the upper alert.");return}alerts[s]={};if(b!==null)alerts[s].below=b;if(h!==null)alerts[s].above=h;if(!Object.keys(alerts[s]).length)delete alerts[s];alertedState[s]=false;save();render();showToast(Object.prototype.hasOwnProperty.call(alerts,s)?`${s} alert saved`:`${s} alert cleared`,"success")}
 window.removeStock=s=>{
  if(!confirm(`Remove ${s} from the Stock Board?`))return;
