@@ -41,7 +41,7 @@ button{font-weight:750;cursor:pointer;min-height:44px}.primary{background:#173b6
 .charttabs button{width:auto;padding:6px 8px;font-size:11px}.charttabs button.active{border-color:var(--blue);background:#142a43}.chartwrap{height:180px}.chartwrap canvas{width:100%;height:100%;display:block}.chartnote{font-size:11px;color:var(--muted);margin-top:5px}
 .tools{display:flex;gap:8px;flex-wrap:wrap;margin:13px 0}.tools input{flex:1;min-width:170px}.tools button{width:auto}
 details{margin-top:16px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:13px}summary{font-weight:850;cursor:pointer}
-.settings{display:grid;gap:9px;margin-top:12px}.note{color:var(--muted);font-size:12px;line-height:1.45}.empty{text-align:center;color:var(--muted);padding:28px}
+.settings{display:grid;gap:9px;margin-top:12px}.note{color:var(--muted);font-size:12px;line-height:1.45}.empty{text-align:center;color:var(--muted);padding:28px}.soundrow{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}.soundrow input{width:auto}.toast{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:12px 16px;color:var(--text);font-size:14px;box-shadow:0 8px 24px rgba(0,0,0,.5);transition:opacity .3s,transform .3s;animation:slideIn .25s ease}@keyframes slideIn{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:translateX(0)}}
 @media(min-width:760px){.controls{grid-template-columns:2fr 1fr auto auto}.controls input{grid-column:auto}.list{grid-template-columns:1fr 1fr}}
 </style>
 </head>
@@ -72,16 +72,18 @@ details{margin-top:16px;background:var(--panel);border:1px solid var(--line);bor
 <div class="box"><h2>Top 5 losers</h2><div id="losers"></div></div>
 </section>
 <div id="list" class="list"></div>
-<div class="tools"><input id="newTicker" placeholder="Add ticker, for example AMZN"><button id="add">Add stock</button><button id="export">Backup board</button><button id="import">Restore board</button><button id="reset">Restore original 50</button><input id="importFile" type="file" accept="application/json,.json" hidden></div>
+<div class="tools"><input id="newTicker" placeholder="Add ticker, for example AMZN"><button id="add">Add stock</button><button id="export">Backup board</button><button id="exportCSV">Export CSV</button><button id="import">Restore board</button><button id="reset">Restore original 50</button><input id="importFile" type="file" accept="application/json,.json" hidden></div>
 <details>
 <summary>Settings — free market data</summary>
 <div class="settings">
 <input id="apiKey" type="password" placeholder="Finnhub API key">
 <button id="saveKey">Save key on this device</button>
+<label class="soundrow"><input type="checkbox" id="soundAlerts"> Play sound when a price alert triggers</label>
 <div class="note">Finnhub supplies live regular-session quotes. Yahoo supplies charts, 2026 history, and premarket/after-hours data when available. The opportunity ranking combines a built-in company quality/valuation rating with price trend, pullback, yearly range position, average price, and recovery signals. It is a research priority score—not a buy recommendation. Alerts are visual only and appear while this page is open. Verify any trade price in Fidelity or Robinhood.</div>
 </div>
 </details>
 </main>
+<div id="toastContainer" style="position:fixed;bottom:18px;right:12px;left:12px;z-index:9999;display:flex;flex-direction:column;gap:8px;max-width:380px;margin-left:auto;pointer-events:none"></div>
 <script>
 const ORIGINAL=[
 ["VTI","Vanguard Total Stock Market ETF"],["TSM","Taiwan Semiconductor"],["QQQM","Invesco NASDAQ 100 ETF"],["META","Meta Platforms"],["MU","Micron Technology"],
@@ -105,9 +107,14 @@ const $=id=>document.getElementById(id);
 let watch=JSON.parse(localStorage.getItem("steveWatchV3")||"null")||ORIGINAL.map(x=>({symbol:x[0],name:x[1]}));
 let data=JSON.parse(localStorage.getItem("steveDataV5")||"{}");
 let alerts=JSON.parse(localStorage.getItem("steveAlertsV2")||"{}");
-let chartCache={},openCharts=JSON.parse(localStorage.getItem("steveOpenCharts")||"{}"),view="all",stopped=false,refreshing=false,autoTimer=null,finnhubCooldownUntil=0;
+let chartCache={},openCharts=JSON.parse(localStorage.getItem("steveOpenCharts")||"{}"),view="all",stopped=false,refreshing=false,autoTimer=null,backupTimer=null,finnhubCooldownUntil=0;
+const alertedState={};
 const AUTO_REFRESH_MS=5*60*1000;
 $("apiKey").value=localStorage.getItem("finnhubKey")||"";
+$("soundAlerts").checked=localStorage.getItem("soundAlerts")==="true";
+$("soundAlerts").addEventListener("change",function(){localStorage.setItem("soundAlerts",String(this.checked));showToast(this.checked?"Alert sounds enabled":"Alert sounds disabled","info")});
+function showToast(message,type="info",duration=4000){const c=$("toastContainer");if(!c)return;const t=document.createElement("div");t.className="toast";t.style.pointerEvents="auto";t.style.borderColor=({success:"var(--green)",warning:"var(--gold)",error:"var(--red)",info:"var(--blue)"}[type]||"var(--line)");t.textContent=message;c.appendChild(t);setTimeout(()=>{t.style.opacity="0";t.style.transform="translateX(18px)";setTimeout(()=>t.remove(),320)},duration)}
+function playAlertSound(){if(localStorage.getItem("soundAlerts")!=="true")return;try{const C=window.AudioContext||window.webkitAudioContext;if(!C)return;const ctx=new C(),osc=ctx.createOscillator(),gain=ctx.createGain();osc.connect(gain);gain.connect(ctx.destination);osc.frequency.value=800;gain.gain.value=.22;osc.start();setTimeout(()=>{osc.frequency.value=1200;setTimeout(()=>{gain.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+.25);osc.stop(ctx.currentTime+.25);setTimeout(()=>ctx.close?.(),400)},140)},140)}catch(e){}}
 function save(){localStorage.setItem("steveWatchV3",JSON.stringify(watch));localStorage.setItem("steveDataV5",JSON.stringify(data));localStorage.setItem("steveAlertsV2",JSON.stringify(alerts));localStorage.setItem("steveOpenCharts",JSON.stringify(openCharts))}
 function num(v,d=2){return Number.isFinite(v)?v.toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d}):"—"}
 function pct(v){return Number.isFinite(v)?`${v>=0?"+":""}${num(v)}%`:"—"}
@@ -252,6 +259,7 @@ function mini(items){return items.length?items.slice(0,5).map(x=>`<div class="mi
 function alertText(x){const p=[];if(Number.isFinite(x.alert?.below))p.push(`At/below $${num(x.alert.below)}`);if(Number.isFinite(x.alert?.above))p.push(`At/above $${num(x.alert.above)}`);return p.length?`${x.hitLow?"⚠ Low alert reached • ":x.hitHigh?"✓ High alert reached • ":""}${p.join(" • ")}`:"No visual alert set"}
 function render(){
  const calculatedAll=watch.map(w=>calculated({...w,...(data[w.symbol]||{})}));
+ calculatedAll.forEach(x=>{const hit=x.hitLow||x.hitHigh;if(hit&&!alertedState[x.symbol]){alertedState[x.symbol]=true;showToast(`${x.symbol} price alert reached at ${Number.isFinite(x.price)?"$"+num(x.price):"the current price"}`,x.hitHigh?"success":"warning",6000);playAlertSound()}else if(!hit){alertedState[x.symbol]=false}});
  const all=calculatedAll.filter(x=>Number.isFinite(x.dayPct));
  $("gainers").innerHTML=mini([...all].sort((a,b)=>b.dayPct-a.dayPct));$("losers").innerHTML=mini([...all].sort((a,b)=>a.dayPct-b.dayPct));
  const rows=allRows(calculatedAll);$("list").innerHTML=rows.length?rows.map(x=>`
@@ -278,72 +286,7 @@ function render(){
  </div></div><div class="chartwrap"><canvas id="canvas-${x.symbol}"></canvas></div><div id="chartnote-${x.symbol}" class="chartnote">Tap a period to change the chart.</div></div>
  </article>`).join(""):'<div class="empty">No stocks match this view.</div>';
 }
-window.setAlert=s=>{const a=alerts[s]||{},low=prompt(`${s}: highlight at or below this price. Blank clears it.`,Number.isFinite(a.below)?a.below:"");if(low===null)return;const high=prompt(`${s}: highlight at or above this price. Blank clears it.`,Number.isFinite(a.above)?a.above:"");if(high===null)return;const b=low.trim()===""?null:Number(low),h=high.trim()===""?null:Number(high);alerts[s]={};if(Number.isFinite(b)&&b>0)alerts[s].below=b;if(Number.isFinite(h)&&h>0)alerts[s].above=h;if(!Object.keys(alerts[s]).length)delete alerts[s];save();render()}
-window.toggleChart=async s=>{
- const p=$(`chart-${s}`);
- const opening=!p.classList.contains("open");
- if(opening){
-   openCharts[s]=openCharts[s]||{range:"3mo"};
-   p.classList.add("open");
-   save();
-   const range=openCharts[s].range||"3mo";
-   const btn=[...p.querySelectorAll(".charttabs button")].find(b=>b.textContent.trim().toLowerCase()===({"1d":"1d","1mo":"1m","3mo":"3m","1y":"1y"}[range]));
-   await loadChart(s,range,btn);
- }else{
-   delete openCharts[s];
-   p.classList.remove("open");
-   save();
- }
-}
-window.loadChart=async(s,range,btn)=>{
- const p=$(`chart-${s}`);
- if(!p)return;
- openCharts[s]={range};
- save();
- p.classList.add("open");
- p.querySelectorAll(".charttabs button").forEach(b=>b.classList.remove("active"));
- btn?.classList.add("active");
- const note=$(`chartnote-${s}`);
- note.textContent="Loading chart…";
- try{
-   const k=`${s}:${range}`;
-   let pts=chartCache[k];
-   if(!pts){pts=await getChart(s,range);chartCache[k]=pts}
-   const canvas=$(`canvas-${s}`);
-   if(!canvas)return;
-   drawChart(canvas,pts);
-   const f=pts[0].v,l=pts.at(-1).v;
-   note.textContent=`${range.toUpperCase()} change: ${pct((l/f-1)*100)} • Low $${num(Math.min(...pts.map(p=>p.v)))} • High $${num(Math.max(...pts.map(p=>p.v)))}`;
- }catch(e){
-   note.textContent="Chart unavailable from the free feed right now.";
- }
-}
-async function restoreOpenCharts(){
- await new Promise(requestAnimationFrame);
- for(const [s,state] of Object.entries(openCharts)){
-   const p=$(`chart-${s}`);
-   if(!p)continue;
-   p.classList.add("open");
-   const range=state?.range||"3mo";
-   const label={"1d":"1D","1mo":"1M","3mo":"3M","1y":"1Y"}[range];
-   const btn=[...p.querySelectorAll(".charttabs button")].find(b=>b.textContent.trim()===label);
-   await loadChart(s,range,btn);
-   await sleep(300);
- }
-}
-function drawChart(canvas,pts){const r=canvas.getBoundingClientRect(),d=window.devicePixelRatio||1;canvas.width=Math.max(300,r.width*d);canvas.height=Math.max(160,r.height*d);const c=canvas.getContext("2d");c.setTransform(d,0,0,d,0,0);const w=r.width,h=r.height,p=18,v=pts.map(x=>x.v),min=Math.min(...v),max=Math.max(...v),span=max-min||1;c.clearRect(0,0,w,h);c.strokeStyle="#29323e";c.lineWidth=1;c.beginPath();for(let i=0;i<4;i++){const y=p+(h-p*2)*i/3;c.moveTo(p,y);c.lineTo(w-p,y)}c.stroke();c.strokeStyle=v.at(-1)>=v[0]?"#21d765":"#ff6257";c.lineWidth=2;c.beginPath();pts.forEach((x,i)=>{const xx=p+(w-p*2)*i/(pts.length-1),yy=h-p-(x.v-min)/span*(h-p*2);i?c.lineTo(xx,yy):c.moveTo(xx,yy)});c.stroke();c.fillStyle="#9ba8b7";c.font="11px -apple-system";c.fillText(`$${num(max)}`,2,12);c.fillText(`$${num(min)}`,2,h-4)}
-async function refresh(){
- if(refreshing)return;refreshing=true;stopped=false;$("refresh").disabled=true;const key=$("apiKey").value.trim();let ok=0,fail=0,quoteOk=0,quoteFail=0,rateLimited=false;
- try{
-  for(let i=0;i<watch.length;i++){if(stopped)break;const s=watch[i].symbol,old=data[s]||{},merged={...old};$("status").textContent=`Loading ${i+1} of ${watch.length}: ${s}`;let loaded=false;
-   if(key){try{Object.assign(merged,await getQuote(s,key));quoteOk++;loaded=true}catch(e){quoteFail++;if(String(e.message||e).includes("rate limited")||String(e.message||e).includes("cooldown"))rateLimited=true}}
-   const session=marketSession().key;if(["premarket","afterhours"].includes(session)&&(!old.extendedAt||Date.now()-old.extendedAt>10*60*1000)){try{Object.assign(merged,await getExtended(s))}catch(e){}}
-   const needYear=!old.yearAt||Date.now()-old.yearAt>24*60*60*1000;if(needYear){try{Object.assign(merged,await getYear(s));if(!loaded&&Number.isFinite(merged.historyPrice)){merged.price=merged.historyPrice;loaded=true}}catch(e){}}else if(!loaded&&Number.isFinite(merged.historyPrice)){merged.price=merged.historyPrice;loaded=true}
-   data[s]=merged;loaded?ok++:fail++;save();render();await sleep(needYear?1200:350);
-  }
-  $("status").textContent=stopped?`Stopped • ${ok}/${watch.length} loaded`:`Last updated ${new Date().toLocaleTimeString()} • ${ok}/${watch.length} loaded • ${fail} unavailable${key?` • Finnhub live: ${quoteOk}${quoteFail?` • quote failures: ${quoteFail}`:""}`:" • Add a Finnhub key for live quotes"}${rateLimited?" • Finnhub cooldown active":""} • Auto-refresh: 5 min`;
- }finally{$("refresh").disabled=false;refreshing=false;updateMarketBadge()}
-}
+window.setAlert=s=>{const a=alerts[s]||{},lowInput=prompt(`${s}: highlight at or below this price. Blank clears it.`,Number.isFinite(a.below)?a.below:"");if(lowInput===null)return;const highInput=prompt(`${s}: highlight at or above this price. Blank clears it.`,Number.isFinite(a.above)?a.above:"");if(highInput===null)return;const b=lowInput.trim()===""?null:Number(lowInput),h=highInput.trim()===""?null:Number(highInput);if((b!==null&&(!Number.isFinite(b)||b<=0))||(h!==null&&(!Number.isFinite(h)||h<=0))){alert("Alert prices must be positive numbers.");return}if(b!==null&&h!==null&&b>=h){alert("The lower alert must be below the upper alert.");return}alerts[s]={};if(b!==null)alerts[s].below=b;if(h!==null)alerts[s].above=h;if(!Object.keys(alerts[s]).length)delete alerts[s];alertedState[s]=false;save();render();showToast(Object.prototype.hasOwnProperty.call(alerts,s)?`${s} alert saved`:`${s} alert cleared`,"success")}
 window.removeStock=s=>{
  if(!confirm(`Remove ${s} from the Stock Board?`))return;
  watch=watch.filter(x=>x.symbol!==s);delete data[s];delete alerts[s];delete openCharts[s];save();render();
@@ -365,6 +308,7 @@ function restoreXrayNotes(notes){
  if(!notes||typeof notes!=="object")return;
  Object.entries(notes).forEach(([symbol,text])=>localStorage.setItem(`xrayNotes:${String(symbol).toUpperCase()}`,String(text??"")));
 }
+$("exportCSV").onclick=()=>{const rows=allRows(watch.map(w=>calculated({...w,...(data[w.symbol]||{})})));const esc=v=>`"${String(v??"").replace(/"/g,'""')}"`;const headers=["Symbol","Name","Price","Day Change %","2026 Gain/Loss %","Opportunity Score","2026 High","2026 Low","Range Position %"];const lines=[headers.map(esc).join(",")];for(const r of rows)lines.push([r.symbol,r.name,Number.isFinite(r.price)?r.price.toFixed(2):"",Number.isFinite(r.dayPct)?r.dayPct.toFixed(2):"",Number.isFinite(r.ytd)?r.ytd.toFixed(2):"",Number.isFinite(r.opportunity)?r.opportunity.toFixed(0):"",Number.isFinite(r.yearHigh)?r.yearHigh.toFixed(2):"",Number.isFinite(r.yearLow)?r.yearLow.toFixed(2):"",Number.isFinite(r.range)?r.range.toFixed(0):""].map(esc).join(","));const blob=new Blob([lines.join("\n")],{type:"text/csv;charset=utf-8"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=`stock-data-${new Date().toISOString().slice(0,10)}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);showToast("CSV exported","success")};
 $("export").onclick=()=>{
  const payload={version:2,exportedAt:new Date().toISOString(),watchlist:watch,alerts,openCharts,xrayNotes:collectXrayNotes(),settings:{sort:$("sort").value}};
  const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
@@ -389,7 +333,9 @@ $("importFile").onchange=async e=>{
  finally{e.target.value="";}
 };
 $("reset").onclick=()=>{if(confirm("Restore the original 50-stock list?")){watch=ORIGINAL.map(x=>({symbol:x[0],name:x[1]}));data={};alerts={};openCharts={};save();render();refresh()}}
-function startAuto(){if(autoTimer)clearInterval(autoTimer);autoTimer=setInterval(()=>{if(!document.hidden)refresh()},AUTO_REFRESH_MS)}
+function createAutoBackup(){const backup={version:2,exportedAt:new Date().toISOString(),watchlist:watch,alerts,openCharts,xrayNotes:typeof collectXrayNotes==="function"?collectXrayNotes():{}};try{localStorage.setItem("steveAutoBackup",JSON.stringify(backup))}catch(e){}}
+function checkAutoBackup(){const rawBackup=localStorage.getItem("steveAutoBackup");if(!rawBackup||watch.length)return;try{const b=JSON.parse(rawBackup);if(Array.isArray(b.watchlist)&&b.watchlist.length){watch=b.watchlist;alerts=b.alerts&&typeof b.alerts==="object"?b.alerts:{};openCharts=b.openCharts&&typeof b.openCharts==="object"?b.openCharts:{};if(typeof restoreXrayNotes==="function")restoreXrayNotes(b.xrayNotes);save();showToast("Auto-backup restored","info")}}catch(e){}}
+function startAuto(){if(autoTimer)clearInterval(autoTimer);if(backupTimer)clearInterval(backupTimer);autoTimer=setInterval(()=>{if(!document.hidden)refresh()},AUTO_REFRESH_MS);backupTimer=setInterval(createAutoBackup,3600000)}
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)refresh()});
 let resizeTimer;
 window.addEventListener("resize",()=>{
@@ -402,7 +348,7 @@ window.addEventListener("resize",()=>{
  },180);
 });
 document.addEventListener("keydown",e=>{if(e.key==="/"&&!/input|select|textarea/i.test(document.activeElement?.tagName)){e.preventDefault();$("search").focus()}if((e.key==="r"||e.key==="R")&&!/input|select|textarea/i.test(document.activeElement?.tagName))refresh()});
-updateMarketBadge();setInterval(updateMarketBadge,60000);render();restoreOpenCharts();startAuto();setTimeout(refresh,400);
+checkAutoBackup();updateMarketBadge();setInterval(updateMarketBadge,60000);render();restoreOpenCharts();startAuto();setTimeout(refresh,400);
 </script>
 </body>
 </html>
