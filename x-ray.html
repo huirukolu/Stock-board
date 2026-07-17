@@ -446,6 +446,9 @@ function compute(){
  const fcf=first(raw(s.financialData?.freeCashflow),m.freeCashFlowTTM);
  const cash=first(raw(s.financialData?.totalCash));
  const debt=first(raw(s.financialData?.totalDebt));
+ const ebitda=first(raw(s.financialData?.ebitda),m.ebitdaTTM);
+ const roic=first(m.roicTTM,m.roicAnnual);
+ const ebitdaMargin=first(m.ebitdaMarginTTM,m.ebitdaMarginAnnual);
  const targetCandidate=firstPositive(raw(s.financialData?.targetMeanPrice),m.targetMeanPrice,m.priceTargetMean);
  const target=finite(targetCandidate)&&finite(price)&&targetCandidate>price*0.25&&targetCandidate<price*4?targetCandidate:null;
  const analystUpside=finite(target)&&finite(price)&&price>0?(target/price-1)*100:null;
@@ -494,7 +497,7 @@ function compute(){
  const fairByTarget=target;
  const fairEstimate=fairByTarget;
  const marginOfSafety=finite(fairEstimate)&&finite(price)?(fairEstimate/price-1)*100:null;
- state.derived={price,pe,fpe,ps,pb,peg,revGrowth,epsGrowth,grossMargin,operatingMargin,netMargin,roe,currentRatio,debtEquity,fcf,cash,debt,target,analystUpside,beta,high52,low52,belowHigh,aboveLow,dividendYield,payoutRatio,fairEstimate,marginOfSafety};
+ state.derived={price,pe,fpe,ps,pb,peg,revGrowth,epsGrowth,grossMargin,operatingMargin,netMargin,roe,currentRatio,debtEquity,fcf,cash,debt,ebitda,roic,ebitdaMargin,target,analystUpside,beta,high52,low52,belowHigh,aboveLow,dividendYield,payoutRatio,fairEstimate,marginOfSafety};
  state.verdict=verdict(overall,confidence);
 }
 function recommendationScore(){
@@ -763,11 +766,13 @@ function render(){
 
  $("valuation").innerHTML=[
    metric("Trailing P/E",fmt(d.pe,1)),metric("Forward P/E",fmt(d.fpe,1)),metric("Price / sales",fmt(d.ps,1)),metric("Price / book",fmt(d.pb,1)),
-   metric("PEG ratio",fmt(d.peg,2)),metric("Fair-value estimate",money(d.fairEstimate)),metric("Margin of safety",pct(d.marginOfSafety)),metric("52-week high",money(d.high52)),metric("Below high",finite(d.belowHigh)?fmt(Math.abs(d.belowHigh),1)+"%":"—"),metric("Above low",finite(d.aboveLow)?fmt(d.aboveLow,1)+"%":"—")
+   metric("PEG ratio",fmt(d.peg,2)),
+   metric("EBITDA",displayCompactMoney(d.ebitda)),
+   metric("EBITDA margin",displayPct(d.ebitdaMargin)),metric("Fair-value estimate",money(d.fairEstimate)),metric("Margin of safety",pct(d.marginOfSafety)),metric("52-week high",money(d.high52)),metric("Below high",finite(d.belowHigh)?fmt(Math.abs(d.belowHigh),1)+"%":"—"),metric("Above low",finite(d.aboveLow)?fmt(d.aboveLow,1)+"%":"—")
  ].join("");
  $("growth").innerHTML=[
    metric("Revenue growth",pct(d.revGrowth)),metric("EPS growth",pct(d.epsGrowth)),metric("Gross margin",pct(d.grossMargin)),metric("Operating margin",pct(d.operatingMargin)),
-   metric("Net margin",pct(d.netMargin)),metric("Return on equity",pct(d.roe)),metric("Beta",fmt(d.beta,2)),metric("YTD return",pct(state.metrics.yearToDatePriceReturnDaily))
+   metric("Net margin",pct(d.netMargin)),metric("Return on equity",pct(d.roe)),metric("ROIC",displayPct(d.roic)),metric("Beta",fmt(d.beta,2)),metric("YTD return",pct(state.metrics.yearToDatePriceReturnDaily))
  ].join("");
  $("balance").innerHTML=[
    metric("Current ratio",fmt(d.currentRatio,2)),metric("Debt / equity",finite(d.debtEquity)?fmt(d.debtEquity,1)+"%":"—"),metric("Cash",compactMoney(d.cash)),metric("Debt",compactMoney(d.debt)),
