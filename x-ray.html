@@ -84,8 +84,18 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
       <div><div id="symbol" class="symbol"></div><div id="company" class="company"></div></div>
       <div><div id="price" class="price">—</div><div id="change" class="change flat">—</div></div>
     </div>
-    <div class="verdictRow">
-      <div><div id="verdict" class="verdict">Insufficient data</div><div id="confidence" class="confidence"></div></div>
+    <div class="verdictRow" style="padding:10px 0 2px">
+      <div>
+        <div class="label">Overall X-Ray Score</div>
+        <div id="hundredVerdict" class="verdict">Insufficient data</div>
+        <div id="hundredConfidence" class="confidence"></div>
+      </div>
+      <div class="scoreRing" id="hundredRing" style="--score:0">
+        <div class="scoreText"><span id="hundredTotal">—</span><small>/100</small></div>
+      </div>
+    </div>
+    <div class="verdictRow" style="border-top:1px solid var(--line);padding-top:10px">
+      <div><div class="label">Research classification</div><div id="verdict" class="verdict">Insufficient data</div><div id="confidence" class="confidence"></div></div>
       <div id="scoreRing" class="scoreRing" style="--score:0"><div class="scoreText"><span id="score">—</span><small>/100</small></div></div>
     </div>
     <div id="explain" class="explain"></div>
@@ -106,23 +116,9 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
     </section>
 
     <section class="card span2">
-      <h2>X-Ray Score — 100-point system</h2>
-      <div class="hero" style="padding:12px">
-        <div class="verdictRow">
-          <div>
-            <div class="label">Overall X-Ray Score</div>
-            <div id="hundredVerdict" class="verdict">—</div>
-            <div id="hundredConfidence" class="confidence"></div>
-          </div>
-          <div class="scoreRing" id="hundredRing" style="--score:0">
-            <div class="scoreText"><span id="hundredTotal">—</span><small>/100</small></div>
-          </div>
-        </div>
-      </div>
-      <div id="hundredBreakdown" class="scoreBars" style="margin-top:12px"></div>
-      <div class="note" style="margin-top:9px">
-        Allocation: Valuation 20, Growth 20, Financial Strength 20, Profitability 15, Cash Flow 10, Analyst View 5, News & Momentum 5, Risk Control 5.
-      </div>
+      <h2>100-point score breakdown</h2>
+      <div id="hundredBreakdown" class="scoreBars"></div>
+      <div class="note" style="margin-top:9px">Allocation: Valuation 20, Growth 20, Financial Strength 20, Profitability 15, Cash Flow 10, Analyst View 5, News & Momentum 5, Risk Control 5.</div>
     </section>
 
     <section class="card">
