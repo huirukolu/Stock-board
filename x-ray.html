@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#07090c">
 <meta name="description" content="Steve's Stock X-Ray — valuation, fundamentals, news, analyst ratings and an explained research score.">
-<title>Steve's Stock X-Ray 5.2</title>
+<title>Steve's Stock X-Ray 5.3</title>
 <style>
 :root{
   --bg:#07090c;--panel:#11161d;--panel2:#171e27;--text:#f5f7fa;--muted:#9ba8b7;
@@ -29,8 +29,16 @@ button{font-weight:800;cursor:pointer;min-height:44px}.primary{background:#173b6
 .pos{color:var(--green)}.neg{color:var(--red)}.flat{color:var(--muted)}
 .verdictRow{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}
 .verdict{font-size:20px;font-weight:950}.confidence{font-size:12px;color:var(--muted)}
-.scoreRing{width:86px;height:86px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--blue) calc(var(--score)*1%),#26303b 0);position:relative}
+.scoreRing{width:86px;height:86px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--ringColor,var(--blue)) calc(var(--score)*1%),#26303b 0);position:relative}
 .scoreRing:after{content:"";position:absolute;inset:8px;background:var(--panel);border-radius:50%}
+.decisionBox{border:2px solid #34506d;background:linear-gradient(180deg,#142131,#101821);border-radius:15px;padding:14px}
+.decisionHeadline{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:10px}
+.decisionAction{font-size:24px;font-weight:950;line-height:1.1}.decisionState{font-size:12px;font-weight:850;padding:6px 9px;border-radius:99px;border:1px solid var(--line);white-space:nowrap}
+.zoneGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.zone{background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:10px}.zone strong{display:block;font-size:15px;margin-top:4px}.zone.current{outline:2px solid var(--blue)}
+.reasonGrid{display:grid;gap:8px}.reasonRow{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;background:var(--panel2);border-radius:10px;padding:9px}.reasonPts{font-weight:950}.reasonNote{color:var(--muted);font-size:11px;margin-top:3px}
+.signalPair{display:grid;grid-template-columns:1fr;gap:8px}.signalBox{background:var(--panel2);border-radius:11px;padding:11px}.signalBox b{display:block;margin-bottom:5px}
+.releaseBadge{display:inline-block;margin-left:6px;padding:2px 6px;border:1px solid var(--line);border-radius:99px;color:var(--blue);font-size:10px;vertical-align:middle}
+@media(min-width:600px){.zoneGrid{grid-template-columns:repeat(4,1fr)}.signalPair{grid-template-columns:1fr 1fr}}
 .scoreText{position:relative;z-index:1;text-align:center;font-weight:950;font-size:22px}.scoreText small{display:block;font-size:10px;color:var(--muted)}
 .explain{background:#101821;border:1px solid var(--line);border-radius:12px;padding:11px;line-height:1.5;font-size:14px}
 .grid{display:grid;gap:10px;margin-top:10px}
@@ -66,7 +74,7 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
 </head>
 <body>
 <header>
-  <div class="headerline"><div><h1>Steve's Stock X-Ray 5.2</h1><div class="sub">Decision-focused research with buy triggers, avoid triggers, personal rules and AI-infrastructure fit</div></div><button id="backBtn">Board</button></div>
+  <div class="headerline"><div><h1>Steve's Stock X-Ray 5.3</h1><div class="sub">Decision-focused research with transparent scoring, price zones, opportunity analysis and AI-infrastructure fit</div></div><button id="backBtn">Board</button></div>
 </header>
 <main>
   <div class="searchbar">
@@ -100,6 +108,25 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
     </div>
     <div id="explain" class="explain"></div>
     <div id="pills" class="pills"></div>
+    <div id="decisionBox" class="decisionBox">
+      <div class="decisionHeadline"><div><div class="label">Decision guide</div><div id="decisionAction" class="decisionAction">Insufficient data</div><div id="decisionReason" class="confidence" style="margin-top:5px"></div></div><div id="decisionState" class="decisionState">WAIT</div></div>
+      <div id="priceZones" class="zoneGrid"></div>
+      <div id="decisionDisclaimer" class="note" style="margin-top:9px">Price zones are research guides derived from available fundamentals and analyst data—not automatic trade instructions.</div>
+    </div>
+    <div class="card" style="padding:13px;margin-top:4px">
+      <h2 style="margin-bottom:10px">Opportunity meter</h2>
+      <div id="opportunityScores" class="scoreGrid"></div>
+      <div id="pullbackSummary" class="explain" style="margin-top:10px"></div>
+    </div>
+    <div class="card" style="padding:13px;margin-top:4px">
+      <h2 style="margin-bottom:10px">Why this score?</h2>
+      <div id="scoreReasons" class="reasonGrid"></div>
+      <div id="scoreMath" class="note" style="margin-top:9px"></div>
+    </div>
+    <div class="card" style="padding:13px;margin-top:4px">
+      <h2 style="margin-bottom:10px">Strongest signal & biggest caution</h2>
+      <div class="signalPair"><div id="strongestSignal" class="signalBox"></div><div id="biggestCaution" class="signalBox"></div></div>
+    </div>
     <div class="card" style="padding:13px;margin-top:4px">
       <h2 style="margin-bottom:10px">Steve's Verdict</h2>
       <div id="steveVerdict" class="explain"></div>
@@ -235,6 +262,11 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
       </div>
     </section>
   </div>
+
+  <details>
+    <summary>What’s new in Version 5.3 <span class="releaseBadge">NEW</span></summary>
+    <div class="note" style="margin-top:10px">Decision price zones • separate Quality, Price Attractiveness and Opportunity scores • transparent point-by-point score explanation • strongest signal and biggest caution • score-colored gauges • clearer pullback context.</div>
+  </details>
 
   <details>
     <summary>Settings & data notes</summary>
@@ -736,6 +768,71 @@ function loadNotes(){
 }
 
 
+function ringColor(score){
+ if(!finite(score))return "var(--muted)";
+ if(score>=90)return "var(--green)";
+ if(score>=75)return "var(--blue)";
+ if(score>=60)return "var(--gold)";
+ return "var(--red)";
+}
+function qualityScore(){return average([state.scores.profitability,state.scores.balance,state.scores.cashflow,state.scores.growth]);}
+function priceAttractivenessScore(){
+ const d=state.derived,vals=[state.scores.valuation];
+ if(finite(d.marginOfSafety))vals.push(scoreLinear(d.marginOfSafety,-25,30));
+ if(finite(d.belowHigh)){
+   const pull=Math.abs(d.belowHigh);
+   vals.push(pull>=10&&pull<=30?88:pull<10?62:pull<=40?55:28);
+ }
+ return average(vals);
+}
+function opportunityScore(){
+ const q=qualityScore(),p=priceAttractivenessScore(),r=state.scores.risk,a=state.scores.analyst;
+ return average([finite(q)?q*1.15:null,finite(p)?p*1.25:null,r,a]);
+}
+function decisionZones(){
+ const d=state.derived;
+ if(!validPositive(d.price))return null;
+ const buy=buyBelowPrice(d);
+ const fairCandidates=[d.target,d.roughValue,d.fairEstimate].filter(validPositive);
+ let fair=fairCandidates.length?fairCandidates.reduce((a,b)=>a+b,0)/fairCandidates.length:null;
+ if(!validPositive(fair))fair=validPositive(buy)?buy/0.88:d.price;
+ const goodLow=validPositive(buy)?buy:fair*.82;
+ const goodHigh=Math.max(goodLow,fair*.95);
+ const fairHigh=Math.max(goodHigh,fair*1.08);
+ const avoid=Math.max(fairHigh,fair*1.22);
+ let stateName="WAIT",action="WAIT / RESEARCH",reason="The available evidence does not produce a dependable price decision.";
+ if(d.price<=goodLow){stateName="BUY ZONE";action="ATTRACTIVE BUY ZONE";reason="Current price is at or below the model's margin-of-safety level."}
+ else if(d.price<=goodHigh){stateName="GOOD VALUE";action="GOOD VALUE AREA";reason="Price is below the central fair-value estimate with some margin of safety."}
+ else if(d.price<=fairHigh){stateName="FAIR VALUE";action="FAIR VALUE — BE SELECTIVE";reason="The business may be attractive, but the current price offers limited margin for error."}
+ else if(d.price<avoid){stateName="WAIT";action="WAIT FOR A BETTER ENTRY";reason="Price is above the model's fair-value band."}
+ else{stateName="AVOID PRICE";action="TOO EXPENSIVE FOR NOW";reason="Price is materially above the model's fair-value estimate."}
+ return{buy:goodLow,goodLow,goodHigh,fairLow:goodHigh,fairHigh,avoid,stateName,action,reason};
+}
+function scoreReasonRows(h){
+ return h.parts.map(p=>{
+   const pts=finite(p.points)?p.points:null;
+   const pctScore=finite(p.score)?p.score:null;
+   let note="Data unavailable";
+   if(finite(pctScore))note=pctScore>=80?"Strong contribution":pctScore>=60?"Positive contribution":pctScore>=45?"Mixed contribution":"Weak contribution";
+   return{...p,note,pts};
+ });
+}
+function strongestAndWeakest(){
+ const labels={valuation:"Valuation",growth:"Growth",profitability:"Profitability",balance:"Financial strength",cashflow:"Cash flow",analyst:"Analyst view",momentum:"Price setup",risk:"Risk control"};
+ const entries=Object.entries(state.scores).filter(([k,v])=>k!=="dividend"&&finite(v));
+ if(!entries.length)return{strong:null,weak:null};
+ entries.sort((a,b)=>b[1]-a[1]);
+ const [sk,sv]=entries[0],[wk,wv]=entries[entries.length-1];
+ return{strong:{label:labels[sk],value:sv},weak:{label:labels[wk],value:wv}};
+}
+function pullbackText(){
+ const d=state.derived;
+ if(!validPositive(d.price)||!validPositive(d.high52))return "A dependable 52-week-high comparison was not available.";
+ const drop=Math.abs(d.belowHigh||0);
+ const context=drop<5?"The stock is trading close to its yearly high.":drop<=15?"This is a modest pullback, not a deep discount.":drop<=30?"This is a meaningful pullback that may improve the entry price.":"This is a deep decline; verify that the business outlook has not deteriorated.";
+ return `<b>${money(d.price)}</b> versus a 52-week high of <b>${money(d.high52)}</b> — <b>${fmt(drop,1)}% below the high</b>. ${context}`;
+}
+
 function hundredPointBreakdown(){
  const s=state.scores;
  const newsMomentum=average([s.momentum, state.news.length ? 65 : null]);
@@ -776,12 +873,32 @@ function render(){
  $("change").textContent=finite(q.dp)?`${pct(q.dp)} • ${q.d>=0?"+":""}${money(q.d)}`:"Price change unavailable";
  $("change").className="change "+(q.dp>0?"pos":q.dp<0?"neg":"flat");
  $("verdict").textContent=state.verdict;$("confidence").textContent=`Data confidence ${fmt(state.dataConfidence,0)}% • Updated ${new Date().toLocaleString()}`;
- $("score").textContent=finite(state.overall)?fmt(state.overall,0):"—";$("scoreRing").style.setProperty("--score",finite(state.overall)?state.overall:0);
+ $("score").textContent=finite(state.overall)?fmt(state.overall,0):"—";$("scoreRing").style.setProperty("--score",finite(state.overall)?state.overall:0);$("scoreRing").style.setProperty("--ringColor",ringColor(state.overall));
  $("explain").innerHTML=buildNarrative();
  const pills=[];
  if(finite(d.pe))pills.push(`P/E ${fmt(d.pe,1)}`);if(finite(d.revGrowth))pills.push(`Revenue growth ${pct(d.revGrowth)}`);
  if(finite(d.belowHigh))pills.push(`${fmt(Math.abs(d.belowHigh),1)}% below 52-week high`);if(finite(d.analystUpside))pills.push(`Analyst upside ${pct(d.analystUpside)}`);
  $("pills").innerHTML=pills.map(x=>`<span class="pill">${safe(x)}</span>`).join("");
+
+ const zones=decisionZones();
+ if(zones){
+   $("decisionAction").textContent=zones.action;
+   $("decisionReason").textContent=zones.reason;
+   $("decisionState").textContent=zones.stateName;
+   const current=d.price;
+   const zoneRows=[
+     ["Buy below",`≤ ${money(zones.buy)}`,current<=zones.buy],
+     ["Good value",`${money(zones.goodLow)} – ${money(zones.goodHigh)}`,current>zones.goodLow&&current<=zones.goodHigh],
+     ["Fair value",`${money(zones.fairLow)} – ${money(zones.fairHigh)}`,current>zones.fairLow&&current<=zones.fairHigh],
+     ["Avoid above",`≥ ${money(zones.avoid)}`,current>=zones.avoid]
+   ];
+   $("priceZones").innerHTML=zoneRows.map(([l,v,on])=>`<div class="zone ${on?"current":""}"><div class="label">${safe(l)}</div><strong>${safe(v)}</strong></div>`).join("");
+ }else{
+   $("decisionAction").textContent="INSUFFICIENT PRICE DATA";$("decisionReason").textContent="A live price and dependable valuation inputs are required.";$("decisionState").textContent="WAIT";$("priceZones").innerHTML="";
+ }
+ const qScore=qualityScore(),pScore=priceAttractivenessScore(),oScore=opportunityScore();
+ $("opportunityScores").innerHTML=[decisionScoreCard("Company quality",qScore),decisionScoreCard("Price attractiveness",pScore),decisionScoreCard("Opportunity",oScore),decisionScoreCard("Risk control",state.scores.risk)].join("");
+ $("pullbackSummary").innerHTML=pullbackText();
 
  const topR=state.recommendations[0]||{};
  const analystCount=(topR.strongBuy||0)+(topR.buy||0)+(topR.hold||0)+(topR.sell||0)+(topR.strongSell||0);
@@ -792,6 +909,12 @@ function render(){
  const marketCap=first(state.profile.marketCapitalization?state.profile.marketCapitalization*1e6:null,raw(state.summary.price?.marketCap));
  const hp=hundredPointBreakdown();
  const clearVerdict=simpleVerdict(hp.total);
+ const reasonRows=scoreReasonRows(hp);
+ $("scoreReasons").innerHTML=reasonRows.map(p=>`<div class="reasonRow"><div><b>${safe(p.key)}</b><div class="reasonNote">${safe(p.note)} • category score ${finite(p.score)?fmt(p.score,0):"—"}/100</div></div><div class="reasonPts">${finite(p.pts)?fmt(p.pts,1):"—"}/${p.max}</div></div>`).join("");
+ $("scoreMath").textContent=finite(hp.total)?`Supported categories produce ${fmt(hp.total,1)} out of 100. Missing categories are excluded and disclosed rather than guessed.`:"Not enough supported categories to calculate the score.";
+ const signals=strongestAndWeakest();
+ $("strongestSignal").innerHTML=signals.strong?`<b class="pos">✓ Strongest: ${safe(signals.strong.label)}</b><span>${fmt(signals.strong.value,0)}/100 — this is the strongest supported part of the current case.</span>`:`<b>Strongest signal unavailable</b>`;
+ $("biggestCaution").innerHTML=signals.weak?`<b class="warning">⚠ Biggest caution: ${safe(signals.weak.label)}</b><span>${fmt(signals.weak.value,0)}/100 — verify this area before making a decision.</span>`:`<b>Biggest caution unavailable</b>`;
  $("steveVerdict").innerHTML=`<b>${clearVerdict}</b><br>${safe(verdictReason(d))}`;
  $("steveVerdictMetrics").innerHTML=[
    metric("Overall conviction",finite(hp.total)?`${fmt(hp.total,0)}/100`:"Not available"),
@@ -892,7 +1015,7 @@ function render(){
  $("hundredTotal").textContent=finite(h.total)?fmt(h.total,0):"—";
  $("hundredVerdict").textContent=hundredVerdict(h.total);
  $("hundredConfidence").textContent=`${h.available}/100 possible points supported by available data`;
- $("hundredRing").style.setProperty("--score",finite(h.total)?h.total:0);
+ $("hundredRing").style.setProperty("--score",finite(h.total)?h.total:0);$("hundredRing").style.setProperty("--ringColor",ringColor(h.total));
  $("hundredBreakdown").innerHTML=h.parts.map(p=>{
    const shown=finite(p.points)?fmt(p.points,1):"—";
    const width=finite(p.points)?clamp(p.points/p.max*100):0;
