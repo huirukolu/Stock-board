@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#07090c">
 <meta name="description" content="Steve's Stock X-Ray — valuation, fundamentals, news, analyst ratings and an explained research score.">
-<title>Steve's Stock X-Ray 5.4</title>
+<title>Steve's Stock X-Ray 5.5</title>
 <style>
 :root{
   --bg:#07090c;--panel:#11161d;--panel2:#171e27;--text:#f5f7fa;--muted:#9ba8b7;
@@ -31,6 +31,11 @@ button{font-weight:800;cursor:pointer;min-height:44px}.primary{background:#173b6
 .verdict{font-size:20px;font-weight:950}.confidence{font-size:12px;color:var(--muted)}
 .scoreRing{width:86px;height:86px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--ringColor,var(--blue)) calc(var(--score)*1%),#26303b 0);position:relative}
 .scoreRing:after{content:"";position:absolute;inset:8px;background:var(--panel);border-radius:50%}
+
+.quickDecision{border:2px solid #3d6791;background:linear-gradient(180deg,#17283b,#0e1824);border-radius:16px;padding:14px}
+.quickTop{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.quickVerdict{font-size:25px;font-weight:950;line-height:1.05}.quickZone{font-size:12px;font-weight:900;padding:7px 10px;border:1px solid var(--line);border-radius:99px;white-space:nowrap}
+.quickGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:12px}.quickTile{background:rgba(255,255,255,.035);border:1px solid var(--line);border-radius:11px;padding:10px}.quickTile strong{display:block;font-size:20px;margin-top:4px}.quickWhy{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);line-height:1.45}.quickHistory{margin-top:8px;color:var(--muted);font-size:12px}
+@media(min-width:700px){.quickGrid{grid-template-columns:repeat(4,1fr)}}
 .decisionBox{border:2px solid #34506d;background:linear-gradient(180deg,#142131,#101821);border-radius:15px;padding:14px}
 .boardContext{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;background:#0d151f;border:1px solid #304158;border-radius:13px;padding:11px 12px}
 .boardRank{font-size:22px;font-weight:950}.boardMeta{font-size:12px;color:var(--muted);margin-top:3px}.boardBadge{min-width:76px;text-align:center;border-radius:12px;background:var(--panel2);padding:9px}.boardBadge b{display:block;font-size:22px}.cockpit{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.cockpitTile{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px}.cockpitTile strong{font-size:20px;display:block;margin-top:4px}.decisionSummary{font-size:15px;line-height:1.45;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
@@ -77,7 +82,7 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
 </head>
 <body>
 <header>
-  <div class="headerline"><div><h1>Steve's Stock X-Ray 5.4</h1><div class="sub">Decision intelligence with Board context, quality/value separation, clear price zones and explained scoring</div></div><button id="backBtn">Board</button></div>
+  <div class="headerline"><div><h1>Steve's Stock X-Ray 5.5</h1><div class="sub">Fast decisions with a five-second summary, Board context, score history, price zones and explained scoring</div></div><button id="backBtn">Board</button></div>
 </header>
 <main>
   <div class="searchbar">
@@ -94,6 +99,13 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
     <div class="heroTop">
       <div><div id="symbol" class="symbol"></div><div id="company" class="company"></div></div>
       <div><div id="price" class="price">—</div><div id="change" class="change flat">—</div></div>
+    </div>
+
+    <div id="quickDecision" class="quickDecision">
+      <div class="quickTop"><div><div class="label">Quick decision</div><div id="quickVerdict" class="quickVerdict">Insufficient data</div><div id="quickSub" class="confidence" style="margin-top:5px"></div></div><div id="quickZone" class="quickZone">WAIT</div></div>
+      <div id="quickGrid" class="quickGrid"></div>
+      <div id="quickWhy" class="quickWhy"></div>
+      <div id="quickHistory" class="quickHistory"></div>
     </div>
     <div id="boardContext" class="boardContext" hidden>
       <div><div class="label">Stock Board context</div><div id="boardRank" class="boardRank">Rank unavailable</div><div id="boardMeta" class="boardMeta"></div></div>
@@ -274,7 +286,7 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
 
   <details>
     <summary>What’s new in Version 5.3 <span class="releaseBadge">NEW</span></summary>
-    <div class="note" style="margin-top:10px">Board rank context • decision cockpit • clearer quality/value/opportunity separation • action-focused explanation • transparent point-by-point score math • strongest signal and biggest caution.</div>
+    <div class="note" style="margin-top:10px">Five-second Quick Decision card • clearer Board handoff • prior-score history • decision cockpit • quality/value/opportunity separation • transparent point-by-point score math.</div>
   </details>
 
   <details>
@@ -857,9 +869,14 @@ function boardContextData(){
 }
 function renderBoardContext(){
  const b=boardContextData();
- if(!finite(b.rank)&&!finite(b.score)){ $("boardContext").hidden=true; return; }
  $("boardContext").hidden=false;
- $("boardRank").textContent=finite(b.rank)?`#${fmt(b.rank,0)}${finite(b.total)?` of ${fmt(b.total,0)}`:""}`:"Board rank unavailable";
+ if(!finite(b.rank)&&!finite(b.score)){
+   $("boardRank").textContent="Board data not passed";
+   $("boardScore").textContent="—";
+   $("boardMeta").textContent="Open this stock from Steve's Board to show its rank and Board score here. Nothing is wrong with the X-Ray.";
+   return;
+ }
+ $("boardRank").textContent=finite(b.rank)?`#${fmt(b.rank,0)}${finite(b.total)?` of ${fmt(b.total,0)}`:""}`:"Rank not passed";
  $("boardScore").textContent=finite(b.score)?fmt(b.score,0):"—";
  const diff=finite(b.score)&&finite(state.overall)?state.overall-b.score:null;
  $("boardMeta").textContent=finite(diff)?`Deep X-Ray is ${diff>=0?"+":""}${fmt(diff,0)} points versus the Board screen. The Board finds candidates; the X-Ray verifies them.`:"The Board finds candidates quickly; the X-Ray performs the deeper verification.";
@@ -880,6 +897,32 @@ function decisionOneLine(zones){
  const quality=finite(q)?(q>=80?"high-quality":q>=65?"solid":"mixed-quality"):"partly measured";
  const value=finite(p)?(p>=80?"attractively priced":p>=60?"reasonably priced":"not clearly cheap"):"difficult to value";
  return `${state.name} currently looks like a ${quality} company that is ${value}. ${zones.reason}`;
+}
+
+function quickHistoryData(){
+ let prev=null;try{prev=JSON.parse(localStorage.getItem(scoreHistoryKey())||"null")}catch(e){}
+ if(!prev||!finite(prev.score)||!finite(state.overall))return null;
+ const delta=Number(state.overall)-Number(prev.score);
+ const age=prev.at?Math.max(0,Math.round((Date.now()-Number(prev.at))/86400000)):null;
+ return{previous:Number(prev.score),delta,age};
+}
+function renderQuickDecision(zones,signals){
+ const q=qualityScore(),p=priceAttractivenessScore(),o=opportunityScore(),risk=state.scores.risk;
+ const main=zones?.action||hundredVerdict(hundredPointBreakdown().total);
+ $("quickVerdict").textContent=main;
+ $("quickZone").textContent=zones?.stateName||"WAIT";
+ $("quickSub").textContent=zones?.reason||"Not enough dependable price information for a price-zone decision.";
+ $("quickGrid").innerHTML=[
+   `<div class="quickTile"><div class="label">Quality</div><strong>${finite(q)?fmt(q,0):"—"}</strong></div>`,
+   `<div class="quickTile"><div class="label">Price today</div><strong>${finite(p)?fmt(p,0):"—"}</strong></div>`,
+   `<div class="quickTile"><div class="label">Opportunity</div><strong>${finite(o)?fmt(o,0):"—"}</strong></div>`,
+   `<div class="quickTile"><div class="label">Risk control</div><strong>${finite(risk)?fmt(risk,0):"—"}</strong></div>`
+ ].join("");
+ const strong=signals?.strong?`<b class="pos">Best:</b> ${safe(signals.strong.label)} (${fmt(signals.strong.value,0)})`:"<b>Best signal:</b> unavailable";
+ const weak=signals?.weak?`<b class="warning">Caution:</b> ${safe(signals.weak.label)} (${fmt(signals.weak.value,0)})`:"<b>Caution:</b> unavailable";
+ $("quickWhy").innerHTML=`${strong}<br>${weak}`;
+ const h=quickHistoryData();
+ $("quickHistory").textContent=h?`Prior X-Ray ${fmt(h.previous,0)} • ${h.delta>=0?"▲":"▼"} ${Math.abs(h.delta).toFixed(1)} points${finite(h.age)?` • saved about ${h.age} day${h.age===1?"":"s"} ago`:""}`:"This analysis becomes the history baseline for the next X-Ray.";
 }
 
 function hundredPointBreakdown(){
@@ -965,6 +1008,7 @@ function render(){
  $("scoreReasons").innerHTML=reasonRows.map(p=>`<div class="reasonRow"><div><b>${safe(p.key)}</b><div class="reasonNote">${safe(p.note)} • category score ${finite(p.score)?fmt(p.score,0):"—"}/100</div></div><div class="reasonPts">${finite(p.pts)?fmt(p.pts,1):"—"}/${p.max}</div></div>`).join("");
  $("scoreMath").textContent=finite(hp.total)?`Supported categories produce ${fmt(hp.total,1)} out of 100. Missing categories are excluded and disclosed rather than guessed.`:"Not enough supported categories to calculate the score.";
  const signals=strongestAndWeakest();
+ renderQuickDecision(zones,signals);
  $("strongestSignal").innerHTML=signals.strong?`<b class="pos">✓ Strongest: ${safe(signals.strong.label)}</b><span>${fmt(signals.strong.value,0)}/100 — this is the strongest supported part of the current case.</span>`:`<b>Strongest signal unavailable</b>`;
  $("biggestCaution").innerHTML=signals.weak?`<b class="warning">⚠ Biggest caution: ${safe(signals.weak.label)}</b><span>${fmt(signals.weak.value,0)}/100 — verify this area before making a decision.</span>`:`<b>Biggest caution unavailable</b>`;
  $("steveVerdict").innerHTML=`<b>${clearVerdict}</b><br>${safe(verdictReason(d))}`;
