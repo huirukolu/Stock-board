@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#07090c">
 <meta name="description" content="Steve's Stock X-Ray — valuation, fundamentals, news, analyst ratings and an explained research score.">
-<title>Steve's Stock X-Ray 4.0</title>
+<title>Steve's Stock X-Ray 4.1</title>
 <style>
 :root{
   --bg:#07090c;--panel:#11161d;--panel2:#171e27;--text:#f5f7fa;--muted:#9ba8b7;
@@ -66,7 +66,7 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
 </head>
 <body>
 <header>
-  <div class="headerline"><div><h1>Steve's Stock X-Ray 4.0</h1><div class="sub">Deep research laboratory — original Stock Board remains untouched — explicit 100-point rating</div></div><button id="backBtn">Board</button></div>
+  <div class="headerline"><div><h1>Steve's Stock X-Ray 4.1</h1><div class="sub">Deep research laboratory — original Stock Board remains untouched — explicit 100-point rating — corrected 52-week and analyst calculations</div></div><button id="backBtn">Board</button></div>
 </header>
 <main>
   <div class="searchbar">
@@ -313,11 +313,14 @@ function compute(){
  const fcf=first(raw(s.financialData?.freeCashflow),m.freeCashFlowTTM);
  const cash=first(raw(s.financialData?.totalCash));
  const debt=first(raw(s.financialData?.totalDebt));
- const target=first(raw(s.financialData?.targetMeanPrice));
- const analystUpside=finite(target)&&finite(price)?(target/price-1)*100:null;
+ const targetCandidate=firstPositive(raw(s.financialData?.targetMeanPrice),m.targetMeanPrice,m.priceTargetMean);
+ const target=finite(targetCandidate)&&finite(price)&&targetCandidate>price*0.25&&targetCandidate<price*4?targetCandidate:null;
+ const analystUpside=finite(target)&&finite(price)&&price>0?(target/price-1)*100:null;
  const beta=first(m.beta,raw(s.defaultKeyStatistics?.beta));
- const high52=first(m["52WeekHigh"],raw(s.summaryDetail?.fiftyTwoWeekHigh));
- const low52=first(m["52WeekLow"],raw(s.summaryDetail?.fiftyTwoWeekLow));
+ const highCandidate=firstPositive(raw(s.summaryDetail?.fiftyTwoWeekHigh),m["52WeekHigh"]);
+ const lowCandidate=firstPositive(raw(s.summaryDetail?.fiftyTwoWeekLow),m["52WeekLow"]);
+ const high52=finite(highCandidate)&&finite(price)&&highCandidate>=price*0.75&&highCandidate<=price*5?highCandidate:null;
+ const low52=finite(lowCandidate)&&finite(price)&&lowCandidate<=price*1.25&&lowCandidate>=price*0.05?lowCandidate:null;
  const belowHigh=finite(price)&&finite(high52)?(price/high52-1)*100:null;
  const aboveLow=finite(price)&&finite(low52)?(price/low52-1)*100:null;
 
@@ -355,9 +358,8 @@ function compute(){
    overall=clamp(overall);
  }
  state.scores=scores;state.confidence=confidence;state.overall=overall;
- const fairByPE=finite(price)&&finite(pe)&&pe>0?price*(Math.min(Math.max(peScore(pe)>=80?pe:Math.min(pe,35),12),35)/pe):null;
  const fairByTarget=target;
- const fairEstimate=average([fairByPE,fairByTarget]);
+ const fairEstimate=fairByTarget;
  const marginOfSafety=finite(fairEstimate)&&finite(price)?(fairEstimate/price-1)*100:null;
  state.derived={price,pe,fpe,ps,pb,peg,revGrowth,epsGrowth,grossMargin,operatingMargin,netMargin,roe,currentRatio,debtEquity,fcf,cash,debt,target,analystUpside,beta,high52,low52,belowHigh,aboveLow,dividendYield,payoutRatio,fairEstimate,marginOfSafety};
  state.verdict=verdict(overall,confidence);
@@ -503,10 +505,10 @@ function decisionScoreCard(label,value){
 function marginSafetyText(){
  const d=state.derived;
  if(!finite(d.marginOfSafety))return "A rough margin-of-safety estimate could not be calculated from the available data.";
- if(d.marginOfSafety>=20)return `Estimated margin of safety: <b class="pos">${pct(d.marginOfSafety)}</b>. The current price is meaningfully below the blended rough-value estimate of ${money(d.fairEstimate)}.`;
- if(d.marginOfSafety>=5)return `Estimated margin of safety: <b class="warning">${pct(d.marginOfSafety)}</b>. The stock appears modestly below the blended rough-value estimate of ${money(d.fairEstimate)}.`;
- if(d.marginOfSafety>-10)return `Estimated margin of safety: <b class="warning">${pct(d.marginOfSafety)}</b>. The current price is close to the blended rough-value estimate of ${money(d.fairEstimate)}.`;
- return `Estimated margin of safety: <b class="neg">${pct(d.marginOfSafety)}</b>. The current price is above the blended rough-value estimate of ${money(d.fairEstimate)}.`;
+ if(d.marginOfSafety>=20)return `Estimated margin of safety: <b class="pos">${pct(d.marginOfSafety)}</b>. The current price is meaningfully below the analyst-consensus rough-value estimate of ${money(d.fairEstimate)}.`;
+ if(d.marginOfSafety>=5)return `Estimated margin of safety: <b class="warning">${pct(d.marginOfSafety)}</b>. The stock appears modestly below the analyst-consensus rough-value estimate of ${money(d.fairEstimate)}.`;
+ if(d.marginOfSafety>-10)return `Estimated margin of safety: <b class="warning">${pct(d.marginOfSafety)}</b>. The current price is close to the analyst-consensus rough-value estimate of ${money(d.fairEstimate)}.`;
+ return `Estimated margin of safety: <b class="neg">${pct(d.marginOfSafety)}</b>. The current price is above the analyst-consensus rough-value estimate of ${money(d.fairEstimate)}.`;
 }
 function buffettLens(){
  const d=state.derived,s=state.scores,parts=[];
