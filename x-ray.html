@@ -242,7 +242,7 @@ const state={symbol:"",name:"",quote:{},profile:{},metrics:{},summary:{},recomme
 let compareInProgress=false;
 $("apiKey").value=localStorage.getItem("finnhubKey")||"";
 const clamp=(v,a=0,b=100)=>Math.max(a,Math.min(b,v));
-const finite=v=>Number.isFinite(Number(v));
+const finite=v=>v!==null&&v!==undefined&&v!==""&&Number.isFinite(Number(v));
 const n=v=>finite(v)?Number(v):null;
 const fmt=(v,d=2)=>finite(v)?Number(v).toLocaleString(undefined,{maximumFractionDigits:d,minimumFractionDigits:d}):"—";
 const money=(v,d=2)=>finite(v)?"$"+fmt(v,d):"—";
@@ -315,7 +315,7 @@ function buyBelowPrice(d){
  const vals=[];
  if(validPositive(d.target)) vals.push(d.target*.85);
  if(validPositive(d.roughValue)) vals.push(d.roughValue*.9);
- if(validPositive(d.price)&&finite(d.pe)&&d.pe>0) vals.push(d.price*Math.min(1,35/d.pe));
+ if(validPositive(d.price)&&finite(d.pe)&&d.pe>0) vals.push(d.price*Math.min(.95,35/d.pe));
  const usable=vals.filter(validPositive);
  return usable.length?Math.min(...usable):null;
 }
@@ -326,7 +326,8 @@ function aiExposure(symbol,name){
   [["ANET","CSCO","CIEN","MRVL","APH","TEL","GLW"],"AI networking",85],
   [["AMAT","LRCX","KLAC","ONTO","TER","ASML"],"AI equipment",88],
   [["ETN","VRT","PWR","GEV","CEG","VST","CAT","CMI"],"AI power",82],
-  [["NVDA","AMD","TSM","INTC","AVGO","QCOM","ARM"],"AI chips",90]
+  [["NVDA","AMD","TSM","INTC","AVGO","QCOM","ARM"],"AI chips",90],
+  [["META","MSFT","AMZN","GOOGL","GOOG","ORCL"],"AI compute platform",82]
  ];
  for(const [arr,type,score] of groups) if(arr.includes(s)) return {type,score};
  if(/memory/.test(n))return{type:"AI memory",score:92};
@@ -734,7 +735,7 @@ function render(){
  $("ruleList").innerHTML=rules.map(x=>`${x[1]?"✓":"✕"} ${safe(x[0])}`).join("<br>");
  const ai=aiExposure(state.symbol,state.profile.name||state.profile.ticker||"");
  $("aiFit").innerHTML=[metric("Primary exposure",ai.type),metric("AI relevance",`${ai.score}/100`)].join("");
- $("aiFitNote").textContent=ai.score>=80?"Direct or strong picks-and-shovels exposure to AI infrastructure.":"AI exposure appears indirect or limited based on the company classification.";
+ $("aiFitNote").textContent=ai.type==="AI compute platform"?"Major builder and operator of AI data-center infrastructure, though not a pure picks-and-shovels supplier.":ai.score>=80?"Direct or strong picks-and-shovels exposure to AI infrastructure.":"AI exposure appears indirect or limited based on the company classification.";
  $("topDecisionSnapshot").innerHTML=[
    metric("SteveScore",finite(state.overall)?`${fmt(state.overall,0)}/100`:"Not available"),
    metric("X-Ray rating",clearVerdict),
@@ -768,19 +769,19 @@ function render(){
    metric("Trailing P/E",fmt(d.pe,1)),metric("Forward P/E",fmt(d.fpe,1)),metric("Price / sales",fmt(d.ps,1)),metric("Price / book",fmt(d.pb,1)),
    metric("PEG ratio",fmt(d.peg,2)),
    metric("EBITDA",displayCompactMoney(d.ebitda)),
-   metric("EBITDA margin",displayPct(d.ebitdaMargin)),metric("Fair-value estimate",money(d.fairEstimate)),metric("Margin of safety",pct(d.marginOfSafety)),metric("52-week high",money(d.high52)),metric("Below high",finite(d.belowHigh)?fmt(Math.abs(d.belowHigh),1)+"%":"—"),metric("Above low",finite(d.aboveLow)?fmt(d.aboveLow,1)+"%":"—")
+   metric("EBITDA margin",displayPct(d.ebitdaMargin)),metric("Fair-value estimate",displayMoney(d.fairEstimate)),metric("Margin of safety",finite(d.marginOfSafety)?pct(d.marginOfSafety):"Not available"),metric("52-week high",displayMoney(d.high52)),metric("Below high",finite(d.belowHigh)?fmt(Math.abs(d.belowHigh),1)+"%":"—"),metric("Above low",finite(d.aboveLow)?fmt(d.aboveLow,1)+"%":"—")
  ].join("");
  $("growth").innerHTML=[
    metric("Revenue growth",pct(d.revGrowth)),metric("EPS growth",pct(d.epsGrowth)),metric("Gross margin",pct(d.grossMargin)),metric("Operating margin",pct(d.operatingMargin)),
    metric("Net margin",pct(d.netMargin)),metric("Return on equity",pct(d.roe)),metric("ROIC",displayPct(d.roic)),metric("Beta",fmt(d.beta,2)),metric("YTD return",pct(state.metrics.yearToDatePriceReturnDaily))
  ].join("");
  $("balance").innerHTML=[
-   metric("Current ratio",fmt(d.currentRatio,2)),metric("Debt / equity",finite(d.debtEquity)?fmt(d.debtEquity,1)+"%":"—"),metric("Cash",compactMoney(d.cash)),metric("Debt",compactMoney(d.debt)),
-   metric("Free cash flow",compactMoney(d.fcf)),metric("FCF / share",money(state.metrics.freeCashFlowPerShareTTM)),metric("Market cap",compactMoney(first(state.profile.marketCapitalization?state.profile.marketCapitalization*1e6:null,raw(state.summary.price?.marketCap)))),metric("Dividend yield",pct(d.dividendYield)),metric("Payout ratio",pct(d.payoutRatio))
+   metric("Current ratio",finite(d.currentRatio)?fmt(d.currentRatio,2):"Not available"),metric("Debt / equity",finite(d.debtEquity)&&d.debtEquity!==0?fmt(d.debtEquity,1)+"%":"Not available"),metric("Cash",displayCompactMoney(d.cash)),metric("Debt",displayCompactMoney(d.debt)),
+   metric("Free cash flow",displayCompactMoney(d.fcf)),metric("FCF / share",displayMoney(state.metrics.freeCashFlowPerShareTTM)),metric("Market cap",displayCompactMoney(first(state.profile.marketCapitalization?state.profile.marketCapitalization*1e6:null,raw(state.summary.price?.marketCap)))),metric("Dividend yield",finite(d.dividendYield)?pct(d.dividendYield):"Not available"),metric("Payout ratio",finite(d.payoutRatio)?pct(d.payoutRatio):"Not available")
  ].join("");
  const r=state.recommendations[0]||{};
  $("analysts").innerHTML=[
-   metric("Target mean",money(d.target)),metric("Implied upside",pct(d.analystUpside)),metric("Strong buy",String(r.strongBuy??"—")),metric("Buy",String(r.buy??"—")),
+   metric("Target mean",displayMoney(d.target)),metric("Implied upside",finite(d.analystUpside)?pct(d.analystUpside):"Not available"),metric("Strong buy",String(r.strongBuy??"—")),metric("Buy",String(r.buy??"—")),
    metric("Hold",String(r.hold??"—")),metric("Sell",String(r.sell??"—")),metric("Strong sell",String(r.strongSell??"—")),metric("Rating period",r.period||"—")
  ].join("");
  $("recommendations").innerHTML=state.recommendations.length?`<div class="note">Latest recommendation trend from Finnhub. Counts reflect contributing analysts and can lag fast-moving events.</div>`:`<div class="empty">Analyst recommendation data was not available on this free feed.</div>`;
