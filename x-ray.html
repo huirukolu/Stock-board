@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#07090c">
 <meta name="description" content="Steve's Stock X-Ray — valuation, fundamentals, news, analyst ratings and an explained research score.">
-<title>Steve's Stock X-Ray 4.4</title>
+<title>Steve's Stock X-Ray 4.5</title>
 <style>
 :root{
   --bg:#07090c;--panel:#11161d;--panel2:#171e27;--text:#f5f7fa;--muted:#9ba8b7;
@@ -66,7 +66,7 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
 </head>
 <body>
 <header>
-  <div class="headerline"><div><h1>Steve's Stock X-Ray 4.4</h1><div class="sub">Deep research laboratory — top-of-page decision snapshot with SteveScore, valuation, analysts, earnings, range and news</div></div><button id="backBtn">Board</button></div>
+  <div class="headerline"><div><h1>Steve's Stock X-Ray 4.5</h1><div class="sub">Deep research laboratory — top-of-page decision snapshot with SteveScore, valuation, analysts, earnings, range and news</div></div><button id="backBtn">Board</button></div>
 </header>
 <main>
   <div class="searchbar">
@@ -100,6 +100,11 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
     </div>
     <div id="explain" class="explain"></div>
     <div id="pills" class="pills"></div>
+    <div class="card" style="padding:13px;margin-top:4px">
+      <h2 style="margin-bottom:10px">Steve's Verdict</h2>
+      <div id="steveVerdict" class="explain"></div>
+      <div id="steveVerdictMetrics" class="metrics" style="margin-top:10px"></div>
+    </div>
     <div class="card" style="padding:13px;margin-top:4px">
       <h2 style="margin-bottom:10px">Decision snapshot</h2>
       <div id="topDecisionSnapshot" class="metrics"></div>
@@ -255,7 +260,49 @@ function earningsDateText(){
  return finite(ts)?new Date(Number(ts)*1000).toLocaleDateString():"Unavailable";
 }
 function rangeText(low,high){
- return finite(low)&&finite(high)?`${money(low)} – ${money(high)}`:"Unavailable";
+ return finite(low)&&finite(high)?`${money(low)} – ${money(high)}`:"Not available";
+}
+function displayMoney(v){
+ return finite(v)&&v!==0?money(v):"Not available";
+}
+function displayCompactMoney(v){
+ return finite(v)&&v!==0?compactMoney(v):"Not available";
+}
+function displayPct(v){
+ return finite(v)?pct(v):"Not available";
+}
+function cleanEarningsDate(){
+ const arr=state.summary?.calendarEvents?.earnings?.earningsDate||[];
+ const ts=raw(arr[0]);
+ return finite(ts)&&Number(ts)>1000000000
+   ? new Date(Number(ts)*1000).toLocaleDateString()
+   : "Not available";
+}
+function simpleVerdict(score){
+ if(!finite(score)) return "Not available";
+ if(score>=82) return "BUY";
+ if(score>=68) return "WATCH";
+ if(score>=55) return "HOLD";
+ return "AVOID";
+}
+function verdictReason(d){
+ const positives=[], risks=[];
+ if(finite(d.pe)&&d.pe<=35) positives.push("valuation is within your preferred range");
+ if(finite(d.revGrowth)&&d.revGrowth>10) positives.push("revenue growth is healthy");
+ if(finite(d.roe)&&d.roe>20) positives.push("profitability is strong");
+ if(finite(d.analystUpside)&&d.analystUpside>10) positives.push("analyst upside is positive");
+ if(finite(d.debtEq)&&d.debtEq>150) risks.push("debt is elevated");
+ if(finite(d.belowHigh)&&d.belowHigh<-30) risks.push("the price trend may be damaged");
+ if(!finite(d.fcf)||d.fcf===0) risks.push("free-cash-flow data is unavailable");
+ const pos=positives[0]||"the available data is mixed";
+ const risk=risks[0]||"no major quantitative warning was detected";
+ return `Main positive: ${pos}. Main risk: ${risk}.`;
+}
+function fairValueText(d){
+ const candidates=[d.target,d.roughValue].filter(v=>finite(v)&&v>0);
+ if(!candidates.length) return "Not available";
+ const mid=candidates.reduce((a,b)=>a+b,0)/candidates.length;
+ return `${money(mid*0.9)} – ${money(mid*1.1)}`;
 }
 function get(obj,path){return path.split(".").reduce((o,k)=>o?.[k],obj)}
 function pick(...paths){for(const p of paths){const v=raw(get(state,p));if(finite(v))return Number(v)}return null}
@@ -596,23 +643,32 @@ function render(){
    ? (buyCount>analystCount*.65?"Mostly Buy":((topR.sell||0)+(topR.strongSell||0)>analystCount*.35?"Cautious":"Mixed"))
    : "Unavailable";
  const marketCap=first(state.profile.marketCapitalization?state.profile.marketCapitalization*1e6:null,raw(state.summary.price?.marketCap));
+ const hp=hundredPointBreakdown();
+ const clearVerdict=simpleVerdict(hp.total);
+ $("steveVerdict").innerHTML=`<b>${clearVerdict}</b><br>${safe(verdictReason(d))}`;
+ $("steveVerdictMetrics").innerHTML=[
+   metric("Overall conviction",finite(hp.total)?`${fmt(hp.total,0)}/100`:"Not available"),
+   metric("Fair value range",fairValueText(d)),
+   metric("Biggest opportunity",finite(d.revGrowth)&&d.revGrowth>10?"Growth":"Not clearly identified"),
+   metric("Biggest risk",(!finite(d.fcf)||d.fcf===0)?"Cash-flow data gap":(finite(d.belowHigh)&&d.belowHigh<-30?"Weak price trend":"No major warning"))
+ ].join("");
  $("topDecisionSnapshot").innerHTML=[
-   metric("SteveScore",finite(state.overall)?`${fmt(state.overall,0)}/100`:"Unavailable"),
-   metric("X-Ray rating",state.verdict||"Unavailable"),
-   metric("Research class",hundredVerdict(hundredPointBreakdown().total)),
-   metric("Current price",money(d.price)),
-   metric("Trailing P/E",fmt(d.pe,1)),
-   metric("Forward P/E",fmt(d.fpe,1)),
-   metric("Market cap",compactMoney(marketCap)),
-   metric("Earnings date",earningsDateText()),
+   metric("SteveScore",finite(state.overall)?`${fmt(state.overall,0)}/100`:"Not available"),
+   metric("X-Ray rating",clearVerdict),
+   metric("Research class",hundredVerdict(hp.total)),
+   metric("Current price",displayMoney(d.price)),
+   metric("Trailing P/E",finite(d.pe)?fmt(d.pe,1):"Not available"),
+   metric("Forward P/E",finite(d.fpe)?fmt(d.fpe,1):"Not available"),
+   metric("Market cap",displayCompactMoney(marketCap)),
+   metric("Earnings date",cleanEarningsDate()),
    metric("52-week range",rangeText(d.low52,d.high52)),
-   metric("Below 52-week high",finite(d.belowHigh)?`${fmt(Math.abs(d.belowHigh),1)}%`:"Unavailable"),
-   metric("Average target",money(d.target)),
-   metric("Target upside/downside",finite(d.analystUpside)?pct(d.analystUpside):"Unavailable"),
+   metric("Below 52-week high",finite(d.belowHigh)?`${fmt(Math.abs(d.belowHigh),1)}%`:"Not available"),
+   metric("Average target",displayMoney(d.target)),
+   metric("Target upside/downside",displayPct(d.analystUpside)),
    metric("Wall Street consensus",consensus),
-   metric("Buy ratings",analystCount?`${buyCount} of ${analystCount}`:"Unavailable"),
-   metric("Revenue growth",pct(d.revGrowth)),
-   metric("Free cash flow",compactMoney(d.fcf))
+   metric("Buy ratings",analystCount?`${buyCount} of ${analystCount}`:"Not available"),
+   metric("Revenue growth",displayPct(d.revGrowth)),
+   metric("Free cash flow",displayCompactMoney(d.fcf))
  ].join("");
  $("topAnalystNote").textContent=analystCount
    ? `Analyst trend (${topR.period||"latest period"}): Strong Buy ${topR.strongBuy||0} • Buy ${topR.buy||0} • Hold ${topR.hold||0} • Sell ${topR.sell||0} • Strong Sell ${topR.strongSell||0}`
