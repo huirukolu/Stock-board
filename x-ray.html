@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#07090c">
 <meta name="description" content="Steve's Stock X-Ray — valuation, fundamentals, news, analyst ratings and an explained research score.">
-<title>Steve's Stock X-Ray 4.1</title>
+<title>Steve's Stock X-Ray 4.2</title>
 <style>
 :root{
   --bg:#07090c;--panel:#11161d;--panel2:#171e27;--text:#f5f7fa;--muted:#9ba8b7;
@@ -66,7 +66,7 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
 </head>
 <body>
 <header>
-  <div class="headerline"><div><h1>Steve's Stock X-Ray 4.1</h1><div class="sub">Deep research laboratory — original Stock Board remains untouched — explicit 100-point rating — corrected 52-week and analyst calculations</div></div><button id="backBtn">Board</button></div>
+  <div class="headerline"><div><h1>Steve's Stock X-Ray 4.2</h1><div class="sub">Deep research laboratory — original Stock Board remains untouched — 100-point rating and Wall Street snapshot at the top — firstPositive fix — corrected 52-week and analyst calculations</div></div><button id="backBtn">Board</button></div>
 </header>
 <main>
   <div class="searchbar">
@@ -100,6 +100,11 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
     </div>
     <div id="explain" class="explain"></div>
     <div id="pills" class="pills"></div>
+    <div class="card" style="padding:11px;margin-top:2px">
+      <div class="label" style="margin-bottom:8px">Wall Street snapshot</div>
+      <div id="topAnalystSnapshot" class="metrics"></div>
+      <div id="topAnalystNote" class="note" style="margin-top:8px"></div>
+    </div>
   </section>
 
   <div id="results" class="grid" hidden>
@@ -235,6 +240,13 @@ const raw=v=>v?.raw ?? v ?? null;
 const safe=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const daysAgo=d=>Math.floor((Date.now()-new Date(d).getTime())/86400000);
 function metric(label,value,cls=""){return `<div class="metric"><div class="label">${safe(label)}</div><div class="value ${cls}">${safe(value)}</div></div>`}
+function firstPositive(...vals){
+  for(const v of vals){
+    const n = Number(v);
+    if(Number.isFinite(n) && n > 0) return n;
+  }
+  return null;
+}
 function first(...vals){return vals.find(finite) ?? null}
 function get(obj,path){return path.split(".").reduce((o,k)=>o?.[k],obj)}
 function pick(...paths){for(const p of paths){const v=raw(get(state,p));if(finite(v))return Number(v)}return null}
@@ -567,6 +579,18 @@ function render(){
  if(finite(d.pe))pills.push(`P/E ${fmt(d.pe,1)}`);if(finite(d.revGrowth))pills.push(`Revenue growth ${pct(d.revGrowth)}`);
  if(finite(d.belowHigh))pills.push(`${fmt(Math.abs(d.belowHigh),1)}% below 52-week high`);if(finite(d.analystUpside))pills.push(`Analyst upside ${pct(d.analystUpside)}`);
  $("pills").innerHTML=pills.map(x=>`<span class="pill">${safe(x)}</span>`).join("");
+
+ const topR=state.recommendations[0]||{};
+ const analystCount=(topR.strongBuy||0)+(topR.buy||0)+(topR.hold||0)+(topR.sell||0)+(topR.strongSell||0);
+ $("topAnalystSnapshot").innerHTML=[
+   metric("Average target",money(d.target)),
+   metric("Upside / downside",finite(d.analystUpside)?pct(d.analystUpside):"Unavailable"),
+   metric("Buy ratings",analystCount?`${(topR.strongBuy||0)+(topR.buy||0)} of ${analystCount}`:"Unavailable"),
+   metric("Consensus",analystCount?((topR.strongBuy||0)+(topR.buy||0) > analystCount*.65?"Mostly Buy":(topR.sell||0)+(topR.strongSell||0) > analystCount*.35?"Cautious":"Mixed"):"Unavailable")
+ ].join("");
+ $("topAnalystNote").textContent=analystCount
+   ? `Strong Buy ${topR.strongBuy||0} • Buy ${topR.buy||0} • Hold ${topR.hold||0} • Sell ${topR.sell||0} • Strong Sell ${topR.strongSell||0}`
+   : "Analyst recommendation counts were not returned by the available free feed.";
 
  const labels={valuation:"Valuation",growth:"Growth",profitability:"Profitability",balance:"Balance sheet",cashflow:"Cash flow",analyst:"Analyst view",momentum:"Price setup",dividend:"Dividend",risk:"Risk control"};
  $("scoreBars").innerHTML=Object.entries(state.scores).map(([k,v])=>`<div class="scoreLine"><span>${labels[k]}</span><div class="bar"><div class="fill" style="width:${finite(v)?clamp(v):0}%"></div></div><b>${finite(v)?fmt(v,0):"—"}</b></div>`).join("");
