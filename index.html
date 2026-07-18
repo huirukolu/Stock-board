@@ -484,5 +484,62 @@ function bootBoard(){
 }
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",bootBoard,{once:true});else bootBoard();
 </script>
+
+<script>
+/* STEVE_EXTERNAL_LINK_NEW_TAB_FIX */
+(function(){
+  function isExternalWebLink(a){
+    const raw=(a.getAttribute("href")||"").trim();
+    if(!raw || raw.startsWith("#") || raw.startsWith("javascript:")) return false;
+
+    // Keep Stock X-Ray navigation in the same tab.
+    if(/^x-ray\.html(?:[?#]|$)/i.test(raw)) return false;
+
+    try{
+      const u=new URL(raw,location.href);
+      return /^https?:$/i.test(u.protocol) && u.origin!==location.origin;
+    }catch(e){
+      return /^https?:\/\//i.test(raw);
+    }
+  }
+
+  function prepareExternalLinks(root=document){
+    root.querySelectorAll("a[href]").forEach(a=>{
+      if(isExternalWebLink(a)){
+        a.target="_blank";
+        a.rel="noopener noreferrer";
+      }
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded",()=>prepareExternalLinks());
+
+  const observer=new MutationObserver(changes=>{
+    for(const change of changes){
+      for(const node of change.addedNodes){
+        if(node.nodeType!==1) continue;
+
+        if(node.matches?.("a[href]") && isExternalWebLink(node)){
+          node.target="_blank";
+          node.rel="noopener noreferrer";
+        }
+
+        prepareExternalLinks(node);
+      }
+    }
+  });
+
+  observer.observe(document.documentElement,{childList:true,subtree:true});
+
+  document.addEventListener("click",event=>{
+    const a=event.target.closest?.("a[href]");
+    if(a && isExternalWebLink(a)){
+      a.target="_blank";
+      a.rel="noopener noreferrer";
+    }
+  },true);
+})();
+</script>
+
 </body>
 </html>
