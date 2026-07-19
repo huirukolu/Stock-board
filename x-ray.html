@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#07090c">
 <meta name="description" content="Steve's Stock X-Ray — valuation, fundamentals, news, analyst ratings and an explained research score.">
-<title>Steve's Stock X-Ray 5.5</title>
+<title>Steve's Stock X-Ray 5.6</title>
 <style>
 :root{
   --bg:#07090c;--panel:#11161d;--panel2:#171e27;--text:#f5f7fa;--muted:#9ba8b7;
@@ -82,7 +82,7 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
 </head>
 <body>
 <header>
-  <div class="headerline"><div><h1>Steve's Stock X-Ray 5.5</h1><div class="sub">Fast decisions with a five-second summary, Board context, score history, price zones and explained scoring</div></div><button id="backBtn">Board</button></div>
+  <div class="headerline"><div><h1>Steve's Stock X-Ray 5.6</h1><div class="sub">Fast decisions with a five-second summary, Board context, score history, price zones and explained scoring</div></div><button id="backBtn">Board</button></div>
 </header>
 <main>
   <div class="searchbar">
@@ -285,7 +285,7 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
   </div>
 
   <details>
-    <summary>What’s new in Version 5.3 <span class="releaseBadge">NEW</span></summary>
+    <summary>What’s new in Version 5.6 <span class="releaseBadge">NEW</span></summary>
     <div class="note" style="margin-top:10px">Five-second Quick Decision card • clearer Board handoff • prior-score history • decision cockpit • quality/value/opportunity separation • transparent point-by-point score math.</div>
   </details>
 
@@ -303,6 +303,7 @@ const $=id=>document.getElementById(id);
 const state={symbol:"",name:"",quote:{},profile:{},metrics:{},summary:{},recommendations:[],news:[],scores:{},confidence:0,dataConfidence:0,investmentConfidence:0,overall:null,verdict:"",compare:null,industry:null};
 let compareInProgress=false;
 $("apiKey").value=localStorage.getItem("finnhubKey")||"";
+window.addEventListener("storage",e=>{if(e.key==="finnhubKey"&&$("apiKey"))$("apiKey").value=e.newValue||""});
 const clamp=(v,a=0,b=100)=>Math.max(a,Math.min(b,v));
 const finite=v=>v!==null&&v!==undefined&&v!==""&&Number.isFinite(Number(v));
 const n=v=>finite(v)?Number(v):null;
@@ -373,6 +374,25 @@ function fairValueText(d){
 }
 
 function validPositive(v){return finite(v)&&Number(v)>0}
+
+function enrichProfile(p){
+ const details={
+  semiconductor:["Supplies the compute silicon used to train or run AI models.","Execution, competition, product cycles and valuation."],
+  foundry:["Manufactures leading-edge chips for many AI designers; a central bottleneck in the supply chain.","Geopolitics, capital intensity, customer concentration and cycle risk."],
+  memory:["Provides high-bandwidth memory and storage that feed AI accelerators.","Memory pricing cycles, capacity additions and customer qualification."],
+  networking:["Moves data between accelerators, servers and data centers; performance can limit AI clusters.","Competition, customer concentration and rapid technology shifts."],
+  connectivity:["Provides connectors, fiber and interconnect components that link AI systems.","Content growth, pricing power and broader industrial cyclicality."],
+  equipment:["Sells tools required to manufacture advanced chips and packaging.","Export controls, fab spending cycles and customer concentration."],
+  power:["Supplies electricity, grid equipment, backup power or cooling needed by AI data centers.","Project timing, regulation, capital intensity and demand durability."],
+  utility:["Generates power that can serve expanding data-center demand.","Commodity prices, regulation and long project timelines."],
+  hyperscaler:["Builds and operates cloud platforms that sell AI computing and services.","Heavy capital spending, monetization, competition and regulatory risk."],
+  software:["Uses or sells AI-enabled software, but infrastructure exposure is less direct.","Durability of AI revenue, competition and valuation."],
+  industrial:["Provides supporting equipment used around data centers.","AI may remain a small part of a diversified business."],
+  general:["No strong direct AI-infrastructure classification was identified.","Do not assume AI exposure without company-specific evidence."]
+ };
+ const [role,risk]=details[p.industry]||details.general;
+ return{...p,role,risk,classification:p.score>=85?"Direct AI infrastructure":p.score>=65?"Meaningful adjacent exposure":"Broad or limited exposure"};
+}
 function companyProfile(symbol,name){
  const s=(symbol||"").toUpperCase(),n=(name||"").toLowerCase();
  const profiles=[
@@ -396,15 +416,15 @@ function companyProfile(symbol,name){
   [["META"],"AI compute platform",84,"hyperscaler",32],
   [["ORCL"],"AI cloud infrastructure",82,"hyperscaler",30]
  ];
- for(const [arr,type,score,industry,preferredPE] of profiles)if(arr.includes(s))return{type,score,industry,preferredPE};
- if(/memory/.test(n))return{type:"AI memory",score:88,industry:"memory",preferredPE:28};
- if(/network|optical/.test(n))return{type:"AI networking",score:80,industry:"networking",preferredPE:32};
- if(/connector|connectivity/.test(n))return{type:"AI connectivity",score:82,industry:"connectivity",preferredPE:32};
- if(/semiconductor equipment/.test(n))return{type:"AI semiconductor equipment",score:86,industry:"equipment",preferredPE:32};
- if(/power|electrical|energy infrastructure/.test(n))return{type:"AI power infrastructure",score:78,industry:"power",preferredPE:28};
- if(/semiconductor|chip/.test(n))return{type:"AI chips",score:84,industry:"semiconductor",preferredPE:34};
- if(/software|cloud/.test(n))return{type:"AI software / cloud",score:60,industry:"software",preferredPE:32};
- return{type:"Broad / limited",score:30,industry:"general",preferredPE:28};
+ for(const [arr,type,score,industry,preferredPE] of profiles)if(arr.includes(s))return enrichProfile({type,score,industry,preferredPE});
+ if(/memory/.test(n))return enrichProfile({type:"AI memory",score:88,industry:"memory",preferredPE:28});
+ if(/network|optical/.test(n))return enrichProfile({type:"AI networking",score:80,industry:"networking",preferredPE:32});
+ if(/connector|connectivity/.test(n))return enrichProfile({type:"AI connectivity",score:82,industry:"connectivity",preferredPE:32});
+ if(/semiconductor equipment/.test(n))return enrichProfile({type:"AI semiconductor equipment",score:86,industry:"equipment",preferredPE:32});
+ if(/power|electrical|energy infrastructure/.test(n))return enrichProfile({type:"AI power infrastructure",score:78,industry:"power",preferredPE:28});
+ if(/semiconductor|chip/.test(n))return enrichProfile({type:"AI chips",score:84,industry:"semiconductor",preferredPE:34});
+ if(/software|cloud/.test(n))return enrichProfile({type:"AI software / cloud",score:60,industry:"software",preferredPE:32});
+ return enrichProfile({type:"Broad / limited",score:30,industry:"general",preferredPE:28});
 }
 function buyBelowPrice(d){
  if(!validPositive(d.price))return null;
@@ -444,11 +464,19 @@ function convictionLabel(score,investmentConfidence){
  return{stars:"★☆☆☆☆",label:"Speculative / avoid"};
 }
 function scoreHistoryKey(){return`xrayScoreHistory:${state.symbol}`}
+function safeStoredJSON(key,fallback=null){
+ try{const value=JSON.parse(localStorage.getItem(key)||"null");return value??fallback}catch(e){return fallback}
+}
 function scoreChangeSummary(){
  if(!state.symbol||!finite(state.overall))return"Run an X-Ray with enough data to begin score tracking.";
- let prev=null;try{prev=JSON.parse(localStorage.getItem(scoreHistoryKey())||"null")}catch(e){}
+ const key=scoreHistoryKey(),history=safeStoredJSON(key,[]);
+ const list=Array.isArray(history)?history:(history?[history]:[]);
+ const prev=list.length?list[list.length-1]:null;
  const current={score:Number(state.overall),at:Date.now(),pe:state.derived?.pe,revGrowth:state.derived?.revGrowth,analystUpside:state.derived?.analystUpside,belowHigh:state.derived?.belowHigh};
- localStorage.setItem(scoreHistoryKey(),JSON.stringify(current));
+ list.push(current);
+ const cutoff=Date.now()-90*86400000;
+ const trimmed=list.filter(x=>x&&Number(x.at)>=cutoff).slice(-30);
+ try{localStorage.setItem(key,JSON.stringify(trimmed))}catch(e){}
  if(!prev||!finite(prev.score))return"Baseline saved. On the next analysis, this section will explain what changed.";
  const delta=current.score-Number(prev.score),reasons=[];
  if(finite(current.pe)&&finite(prev.pe)){const x=current.pe-prev.pe;if(x<-1)reasons.push("valuation became more attractive");else if(x>1)reasons.push("valuation became less attractive")}
@@ -490,8 +518,9 @@ function triggerHTML(d,analystCount){
 function get(obj,path){return path.split(".").reduce((o,k)=>o?.[k],obj)}
 function pick(...paths){for(const p of paths){const v=raw(get(state,p));if(finite(v))return Number(v)}return null}
 function textPick(...paths){for(const p of paths){const v=get(state,p);if(v!==undefined&&v!==null&&String(v).trim())return String(v)}return""}
-function scoreLinear(v,bad,good,invert=false){
- if(!finite(v))return null;let s=clamp((Number(v)-bad)/(good-bad)*100);return invert?100-s:s;
+function scoreLinear(v,bad,good){
+ if(!finite(v)||bad===good)return null;
+ return clamp((Number(v)-bad)/(good-bad)*100);
 }
 function peScore(pe){
  if(!finite(pe)||pe<=0)return null;
@@ -554,6 +583,7 @@ function compute(){
  const price=first(q.c,raw(s.price?.regularMarketPrice));
  const pe=first(m.peTTM,raw(s.summaryDetail?.trailingPE),raw(s.defaultKeyStatistics?.trailingPE));
  const fpe=first(m.forwardPE,raw(s.summaryDetail?.forwardPE),raw(s.defaultKeyStatistics?.forwardPE));
+ const eps=first(m.epsTTM,raw(s.defaultKeyStatistics?.trailingEps));
  const ps=first(m.psTTM,raw(s.summaryDetail?.priceToSalesTrailing12Months));
  const pb=first(m.pbAnnual,raw(s.defaultKeyStatistics?.priceToBook));
  const peg=first(m.pegRatio,raw(s.defaultKeyStatistics?.pegRatio));
@@ -583,7 +613,7 @@ function compute(){
  const aboveLow=finite(price)&&finite(low52)?(price/low52-1)*100:null;
 
  state.industry=companyProfile(state.symbol,state.name);
- const valuation=average([industryPeScore(pe,state.industry),industryPeScore(fpe,state.industry),scoreLinear(ps,12,2,true),scoreLinear(pb,12,2,true),scoreLinear(peg,3.5,.8,true)]);
+ const valuation=average([industryPeScore(pe,state.industry),industryPeScore(fpe,state.industry),scoreLinear(ps,12,2),scoreLinear(pb,12,2),scoreLinear(peg,3.5,.8)]);
  const growth=average([scoreLinear(revGrowth,-5,25),scoreLinear(epsGrowth,-10,30)]);
  const profitability=average([scoreLinear(grossMargin,15,65),scoreLinear(operatingMargin,5,35),scoreLinear(netMargin,3,25),scoreLinear(roe,5,30)]);
  const balance=average([scoreLinear(currentRatio,.7,2.2),debtScore(debtEquity),finite(cash)&&finite(debt)?scoreLinear(cash/debt,.15,1.25):null]);
@@ -591,7 +621,7 @@ function compute(){
  const analyst=average([scoreLinear(analystUpside,-15,25),recommendationScore()]);
  const momentum=average([
    finite(belowHigh)?(Math.abs(belowHigh)>=8&&Math.abs(belowHigh)<=25?85:Math.abs(belowHigh)<8?60:Math.abs(belowHigh)<=40?55:25):null,
-   scoreLinear(m.yearToDatePriceReturnDaily,-25,30)
+   scoreLinear(raw(m.yearToDatePriceReturnDaily),-25,30)
  ]);
  const dividendYield=first(m.dividendYieldIndicatedAnnual,raw(s.summaryDetail?.dividendYield)!=null?raw(s.summaryDetail?.dividendYield)*100:null);
  const payoutRatio=first(m.payoutRatioTTM,raw(s.summaryDetail?.payoutRatio)!=null?raw(s.summaryDetail?.payoutRatio)*100:null);
@@ -600,7 +630,7 @@ function compute(){
    finite(payoutRatio)?(payoutRatio>0&&payoutRatio<65?85:payoutRatio<85?60:payoutRatio<=0?25:30):null
  ]);
  const risk=average([
-   finite(beta)?scoreLinear(beta,2.1,.65,true):null,
+   finite(beta)?scoreLinear(beta,2.1,.65):null,
    finite(debtEquity)?debtScore(debtEquity):null,
    finite(belowHigh)&&belowHigh<-40?25:75
  ]);
@@ -620,10 +650,11 @@ function compute(){
  const dispersion=scoreSpread.length?Math.max(...scoreSpread)-Math.min(...scoreSpread):100;
  const investmentConfidence=clamp((finite(overall)?Math.abs(overall-50)*1.25:0)+(100-dispersion)*.35);
  state.scores=scores;state.confidence=dataConfidence;state.dataConfidence=dataConfidence;state.investmentConfidence=investmentConfidence;state.overall=overall;
- const fairByTarget=target;
- const fairEstimate=fairByTarget;
+ const roughValue=finite(eps)&&eps>0?eps*(state.industry?.preferredPE||28):null;
+ const fairCandidates=[target,roughValue].filter(validPositive);
+ const fairEstimate=fairCandidates.length?fairCandidates.reduce((a,b)=>a+b,0)/fairCandidates.length:null;
  const marginOfSafety=finite(fairEstimate)&&finite(price)?(fairEstimate/price-1)*100:null;
- state.derived={price,pe,fpe,ps,pb,peg,revGrowth,epsGrowth,grossMargin,operatingMargin,netMargin,roe,currentRatio,debtEquity,fcf,cash,debt,ebitda,roic,ebitdaMargin,target,analystUpside,beta,high52,low52,belowHigh,aboveLow,dividendYield,payoutRatio,fairEstimate,marginOfSafety};
+ state.derived={price,pe,fpe,eps,ps,pb,peg,revGrowth,epsGrowth,grossMargin,operatingMargin,netMargin,roe,currentRatio,debtEquity,fcf,cash,debt,ebitda,roic,ebitdaMargin,target,analystUpside,beta,high52,low52,belowHigh,aboveLow,dividendYield,payoutRatio,roughValue,fairEstimate,marginOfSafety};
  state.verdict=verdict(overall,dataConfidence);
 }
 function recommendationScore(){
@@ -1025,8 +1056,8 @@ function render(){
  $("ruleScore").textContent=`Steve Rule Pass: ${passed}/${rules.length}`;
  $("ruleList").innerHTML=rules.map(x=>`${x[1]?"✓":"✕"} ${safe(x[0])}`).join("<br>");
  const ai=aiExposure(state.symbol,state.profile.name||state.profile.ticker||"");
- $("aiFit").innerHTML=[metric("Primary exposure",ai.type),metric("AI relevance",`${ai.score}/100`)].join("");
- $("aiFitNote").textContent=ai.industry==="hyperscaler"?"Major builder and operator of AI data-center infrastructure, though not a pure picks-and-shovels supplier.":ai.score>=88?"Direct, strategically important picks-and-shovels exposure to AI infrastructure.":ai.score>=70?"Meaningful AI infrastructure exposure, but it is one part of a broader business.":"AI exposure appears indirect or limited based on the company classification.";
+ $("aiFit").innerHTML=[metric("Primary exposure",ai.type),metric("AI relevance",`${ai.score}/100`),metric("Classification",ai.classification),metric("Preferred P/E guide",`${ai.preferredPE}×`)].join("");
+ $("aiFitNote").textContent=`Why it matters: ${ai.role} Main caution: ${ai.risk}`;
  const conviction=convictionLabel(state.overall,state.investmentConfidence);
  $("confidenceSplit").innerHTML=[
    metric("Data confidence",`${fmt(state.dataConfidence,0)}%`),
@@ -1087,7 +1118,7 @@ function render(){
  $("recommendations").innerHTML=state.recommendations.length?`<div class="note">Latest recommendation trend from Finnhub. Counts reflect contributing analysts and can lag fast-moving events.</div>`:`<div class="empty">Analyst recommendation data was not available on this free feed.</div>`;
 
  $("newsSummary").innerHTML=newsTone();
- $("news").innerHTML=state.news.length?state.news.slice(0,10).map(x=>`<a class="newsItem" href="${safe(x.url||"#")}" target="_blank" rel="noopener"><b>${safe(x.headline||"Untitled")}</b><div class="newsMeta">${safe(x.source||"Source")} • ${x.datetime?new Date(x.datetime*1000).toLocaleString():"Date unavailable"}</div>${x.summary?`<div class="newsSummary">${safe(x.summary.slice(0,280))}${x.summary.length>280?"…":""}</div>`:""}</a>`).join(""):`<div class="empty">No recent news was returned.</div>`;
+ $("news").innerHTML=state.news.length?state.news.slice(0,10).map(x=>`<a class="newsItem" href="${safe(x.url||"#")}" target="_blank" rel="noopener noreferrer"><b>${safe(x.headline||"Untitled")}</b><div class="newsMeta">${safe(x.source||"Source")} • ${x.datetime?new Date(x.datetime*1000).toLocaleString():"Date unavailable"}</div>${x.summary?`<div class="newsSummary">${safe(x.summary.slice(0,280))}${x.summary.length>280?"…":""}</div>`:""}</a>`).join(""):`<div class="empty">No recent news was returned.</div>`;
 
  const sr=strengthsRisks();
  $("strengths").innerHTML=sr.strengths.map(x=>`<span class="pill pos">${safe(x)}</span>`).join("");
@@ -1131,6 +1162,7 @@ function compactMoney(v){
  if(a>=1e12)return `$${fmt(v/1e12,2)}T`;if(a>=1e9)return `$${fmt(v/1e9,2)}B`;if(a>=1e6)return `$${fmt(v/1e6,2)}M`;return money(v,0);
 }
 async function analyze(){
+ if(!navigator.onLine){$("status").textContent="You appear to be offline. Reconnect to the internet and run X-Ray again.";return}
  const symbol=$("ticker").value.trim().toUpperCase().replace(/\s/g,"");
  if(!symbol){$("status").textContent="Enter a ticker first.";return}
  state.symbol=symbol;$("analyze").disabled=true;$("status").textContent=`Running X-Ray on ${symbol}… collecting quote, fundamentals, analyst ratings and news.`;
@@ -1185,6 +1217,8 @@ $("compareBtn").onclick=async()=>{
  }finally{compareInProgress=false;$("compareBtn").disabled=false}
 };
 $("compareTicker").addEventListener("keydown",e=>{if(e.key==="Enter")$("compareBtn").click()});
+
+document.addEventListener("click",e=>{const a=e.target.closest("a[target=\"_blank\"]");if(a)a.rel="noopener noreferrer"});
 
 const initial=new URLSearchParams(location.search).get("ticker");if(initial){$("ticker").value=initial.toUpperCase();setTimeout(analyze,250)}
 </script>
