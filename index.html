@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#07090c">
 <meta name="description" content="Steve's Stock Board — live quotes, ranked opportunities, charts, alerts, and watchlist backup.">
-<title>Steve's Stock Board 5.1</title>
+<title>Steve's Stock Board 5.2</title>
 <style>
 :root{--bg:#07090c;--panel:#11161d;--panel2:#171e27;--text:#f5f7fa;--muted:#9ba8b7;--line:#29323e;--green:#21d765;--red:#ff6257;--blue:#67adff;--gold:#ffd166}
 *{box-sizing:border-box}
@@ -42,13 +42,16 @@ button{font-weight:750;cursor:pointer;min-height:44px}.primary{background:#173b6
 .tools{display:flex;gap:8px;flex-wrap:wrap;margin:13px 0}.tools input{flex:1;min-width:170px}.tools button{width:auto}
 details{margin-top:16px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:13px}summary{font-weight:850;cursor:pointer}
 .settings{display:grid;gap:9px;margin-top:12px}.note{color:var(--muted);font-size:12px;line-height:1.45}.empty{text-align:center;color:var(--muted);padding:28px}.soundrow{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}.soundrow input{width:auto}.toast{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:12px 16px;color:var(--text);font-size:14px;box-shadow:0 8px 24px rgba(0,0,0,.5);transition:opacity .3s,transform .3s;animation:slideIn .25s ease}@keyframes slideIn{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:translateX(0)}}
+
+.portfolioHero{display:grid;gap:10px;margin:4px 0 12px}.portfolioTotals{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.portfolioBox{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:12px}.portfolioBox .big{font-size:22px;font-weight:900;margin-top:5px}.portfolioActions{display:flex;gap:8px;flex-wrap:wrap}.portfolioActions button{width:auto}.portfolioList{display:grid;gap:9px}.holding{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:13px}.holdingTop{display:grid;grid-template-columns:1fr auto;gap:10px}.holdingGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:7px;margin-top:10px}.holdingAction{margin-top:10px;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:#101821;font-size:12px;line-height:1.4}.portfolioEmpty{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:24px;text-align:center;color:var(--muted)}
+@media(min-width:760px){.portfolioTotals{grid-template-columns:repeat(4,1fr)}.portfolioList{grid-template-columns:1fr 1fr}.holdingGrid{grid-template-columns:repeat(4,1fr)}}
 @media(min-width:760px){.controls{grid-template-columns:2fr 1fr auto auto}.controls input{grid-column:auto}.list{grid-template-columns:1fr 1fr}}
 </style>
 </head>
 <body>
 <header>
-<div class="headerline"><h1>Steve's Stock Board 5.1R</h1><span id="marketBadge" class="marketbadge">Checking market…</span></div>
-<div class="sub">Live quotes • ranked opportunities • tap any ticker for Stock X-Ray • charts • visual alerts</div>
+<div class="headerline"><h1>Steve's Stock Board 5.2</h1><span id="marketBadge" class="marketbadge">Checking market…</span></div>
+<div class="sub">Live quotes • ranked opportunities • Portfolio Center • tap any ticker for Stock X-Ray • charts • visual alerts</div>
 </header>
 <main>
 <div class="controls">
@@ -65,11 +68,24 @@ details{margin-top:16px;background:var(--panel);border:1px solid var(--line);bor
 <div class="tabs">
 <button class="active" data-view="all">All stocks</button><button data-view="opportunities">Biggest opportunities</button><button data-view="gainers">Gainers</button>
 <button data-view="losers">Losers</button><button data-view="dips">Deepest dips</button>
-<button data-view="belowAvg">Below average</button><button data-view="nearHigh">Near highs</button><button data-view="alerts">Alerts</button>
+<button data-view="belowAvg">Below average</button><button data-view="nearHigh">Near highs</button><button data-view="alerts">Alerts</button><button data-view="portfolio">Portfolio Center</button>
 </div>
 <section class="summary">
 <div class="box"><h2>Top 5 gainers</h2><div id="gainers"></div></div>
 <div class="box"><h2>Top 5 losers</h2><div id="losers"></div></div>
+</section>
+<section id="portfolioCenter" hidden>
+  <div class="portfolioHero">
+    <div class="portfolioTotals">
+      <div class="portfolioBox"><div class="name">Current value</div><div id="portfolioValue" class="big">$0.00</div></div>
+      <div class="portfolioBox"><div class="name">Total cost</div><div id="portfolioCost" class="big">$0.00</div></div>
+      <div class="portfolioBox"><div class="name">Total gain/loss</div><div id="portfolioGain" class="big flat">$0.00</div></div>
+      <div class="portfolioBox"><div class="name">Holdings</div><div id="portfolioCount" class="big">0</div></div>
+    </div>
+    <div class="portfolioActions"><button id="addHolding" class="primary">Add holding</button><button id="clearPortfolio">Clear portfolio</button></div>
+    <div class="note">Enter shares and average cost. The Portfolio Center combines your actual gain/loss with the Board opportunity score. It is a research guide—not an automatic trade instruction.</div>
+  </div>
+  <div id="portfolioList" class="portfolioList"></div>
 </section>
 <div id="list" class="list"></div>
 <div class="tools"><input id="newTicker" placeholder="Add ticker, for example AMZN"><button id="add">Add stock</button><button id="export">Backup board</button><button id="exportCSV">Export CSV</button><button id="import">Restore board</button><button id="reset">Restore original 50</button><input id="importFile" type="file" accept="application/json,.json" hidden></div>
@@ -116,6 +132,7 @@ if(!Array.isArray(watch))watch=ORIGINAL.map(x=>({symbol:x[0],name:x[1]}));
 watch=watch.map(x=>({symbol:String(x?.symbol||"").trim().toUpperCase(),name:String(x?.name||x?.symbol||"").trim()})).filter(x=>x.symbol);
 let data=safeStoredJSON("steveDataV5",{});if(!data||typeof data!=="object"||Array.isArray(data))data={};
 let alerts=safeStoredJSON("steveAlertsV2",{});if(!alerts||typeof alerts!=="object"||Array.isArray(alerts))alerts={};
+let holdings=safeStoredJSON("steveHoldingsV1",{});if(!holdings||typeof holdings!=="object"||Array.isArray(holdings))holdings={};
 let chartCache={},openCharts=safeStoredJSON("steveOpenCharts",{}),view="all",stopped=false,refreshing=false,autoTimer=null,backupTimer=null,finnhubCooldownUntil=0;
 if(!openCharts||typeof openCharts!=="object"||Array.isArray(openCharts))openCharts={};
 const alertedState={};
@@ -125,7 +142,7 @@ $("soundAlerts").checked=localStorage.getItem("soundAlerts")==="true";
 $("soundAlerts").addEventListener("change",function(){localStorage.setItem("soundAlerts",String(this.checked));showToast(this.checked?"Alert sounds enabled":"Alert sounds disabled","info")});
 function showToast(message,type="info",duration=4000){const c=$("toastContainer");if(!c)return;const t=document.createElement("div");t.className="toast";t.style.pointerEvents="auto";t.style.borderColor=({success:"var(--green)",warning:"var(--gold)",error:"var(--red)",info:"var(--blue)"}[type]||"var(--line)");t.textContent=message;c.appendChild(t);setTimeout(()=>{t.style.opacity="0";t.style.transform="translateX(18px)";setTimeout(()=>t.remove(),320)},duration)}
 function playAlertSound(){if(localStorage.getItem("soundAlerts")!=="true")return;try{const C=window.AudioContext||window.webkitAudioContext;if(!C)return;const ctx=new C(),osc=ctx.createOscillator(),gain=ctx.createGain();osc.connect(gain);gain.connect(ctx.destination);osc.frequency.value=800;gain.gain.value=.22;osc.start();setTimeout(()=>{osc.frequency.value=1200;setTimeout(()=>{gain.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+.25);osc.stop(ctx.currentTime+.25);setTimeout(()=>ctx.close?.(),400)},140)},140)}catch(e){}}
-function save(){localStorage.setItem("steveWatchV3",JSON.stringify(watch));localStorage.setItem("steveDataV5",JSON.stringify(data));localStorage.setItem("steveAlertsV2",JSON.stringify(alerts));localStorage.setItem("steveOpenCharts",JSON.stringify(openCharts))}
+function save(){localStorage.setItem("steveWatchV3",JSON.stringify(watch));localStorage.setItem("steveDataV5",JSON.stringify(data));localStorage.setItem("steveAlertsV2",JSON.stringify(alerts));localStorage.setItem("steveOpenCharts",JSON.stringify(openCharts));localStorage.setItem("steveHoldingsV1",JSON.stringify(holdings))}
 function num(v,d=2){return Number.isFinite(v)?v.toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d}):"—"}
 function pct(v){return Number.isFinite(v)?`${v>=0?"+":""}${num(v)}%`:"—"}
 function cls(v){return v>0?"pos":v<0?"neg":"flat"}
@@ -267,8 +284,48 @@ function allRows(baseRows){
 }
 function mini(items){return items.length?items.slice(0,5).map(x=>`<div class="mini"><div><span class="ticker">${x.symbol}</span><div class="name">${x.name}</div></div><b class="${cls(x.dayPct)}">${pct(x.dayPct)}</b></div>`).join(""):'<div class="name">Waiting for data…</div>'}
 function alertText(x){const p=[];if(Number.isFinite(x.alert?.below))p.push(`At/below $${num(x.alert.below)}`);if(Number.isFinite(x.alert?.above))p.push(`At/above $${num(x.alert.above)}`);return p.length?`${x.hitLow?"⚠ Low alert reached • ":x.hitHigh?"✓ High alert reached • ":""}${p.join(" • ")}`:"No visual alert set"}
+function portfolioAction(x,gainPct){
+ if(!Number.isFinite(x.price))return "WAIT — current price is unavailable.";
+ if(Number.isFinite(x.opportunity)&&x.opportunity>=78&&gainPct<15)return "ADD / HOLD — strong Board opportunity and the position is not heavily extended.";
+ if(Number.isFinite(x.opportunity)&&x.opportunity>=65)return "HOLD / WATCH — reasonable setup; add only with conviction and diversification in mind.";
+ if(gainPct>35&&Number.isFinite(x.opportunity)&&x.opportunity<55)return "REVIEW / POSSIBLE TRIM — large gain with a weaker current opportunity score.";
+ if(gainPct<-15&&Number.isFinite(x.opportunity)&&x.opportunity<48)return "REVIEW THESIS — the position is down and the Board setup is weak.";
+ return "HOLD / MONITOR — no strong add or trim signal from the current Board data.";
+}
+function renderPortfolio(calculatedAll){
+ const rows=calculatedAll.filter(x=>holdings[x.symbol]&&Number(holdings[x.symbol].shares)>0);
+ let totalValue=0,totalCost=0;
+ const enriched=rows.map(x=>{
+   const h=holdings[x.symbol],shares=Number(h.shares)||0,cost=Number(h.cost)||0;
+   const positionValue=Number.isFinite(x.price)?shares*x.price:0,basis=shares*cost,gain=positionValue-basis,gainPct=basis>0?gain/basis*100:null;
+   totalValue+=positionValue;totalCost+=basis;
+   return{...x,shares,cost,positionValue,basis,gain,gainPct};
+ }).sort((a,b)=>b.positionValue-a.positionValue);
+ const totalGain=totalValue-totalCost;
+ $("portfolioValue").textContent="$"+num(totalValue);
+ $("portfolioCost").textContent="$"+num(totalCost);
+ $("portfolioGain").textContent=`${totalGain>=0?"+":"-"}$${num(Math.abs(totalGain))}${totalCost>0?` (${pct(totalGain/totalCost*100)})`:""}`;
+ $("portfolioGain").className="big "+cls(totalGain);
+ $("portfolioCount").textContent=String(enriched.length);
+ $("portfolioList").innerHTML=enriched.length?enriched.map(x=>{
+   const weight=totalValue>0?x.positionValue/totalValue*100:null;
+   return `<article class="holding"><div class="holdingTop"><div><div class="symbol"><a href="x-ray.html?ticker=${encodeURIComponent(x.symbol)}">${x.symbol}</a></div><div class="company">${x.name}</div></div><div><div class="price">$${num(x.positionValue)}</div><div class="day ${cls(x.gain)}">${x.gain>=0?"+":"-"}$${num(Math.abs(x.gain))} • ${pct(x.gainPct)}</div></div></div>
+   <div class="holdingGrid"><div class="metric"><div class="label">Shares</div><div class="value">${num(x.shares,4)}</div></div><div class="metric"><div class="label">Average cost</div><div class="value">$${num(x.cost)}</div></div><div class="metric"><div class="label">Current price</div><div class="value">${Number.isFinite(x.price)?"$"+num(x.price):"—"}</div></div><div class="metric"><div class="label">Portfolio weight</div><div class="value">${Number.isFinite(weight)?num(weight,1)+"%":"—"}</div></div><div class="metric"><div class="label">Board opportunity</div><div class="value">${Number.isFinite(x.opportunity)?num(x.opportunity,0)+"/100":"—"}</div></div><div class="metric"><div class="label">Quality</div><div class="value">${Number.isFinite(x.quality)?num(x.quality,0):"—"}</div></div><div class="metric"><div class="label">Value</div><div class="value">${Number.isFinite(x.value)?num(x.value,0):"—"}</div></div><div class="metric"><div class="label">Below 2026 high</div><div class="value">${Number.isFinite(x.belowHigh)?num(Math.abs(x.belowHigh),1)+"%":"—"}</div></div></div>
+   <div class="holdingAction"><b>Portfolio guide:</b> ${portfolioAction(x,x.gainPct)}</div><div class="actions" style="margin-top:9px"><button onclick="editHolding('${x.symbol}')">Edit holding</button><button class="remove" onclick="removeHolding('${x.symbol}')">Remove holding</button></div></article>`;
+ }).join(""):'<div class="portfolioEmpty">No holdings entered yet. Tap “Add holding,” or use the Portfolio button on any stock card.</div>';
+}
+window.editHolding=s=>{
+ const current=holdings[s]||{};
+ const sh=prompt(`${s}: number of shares`,Number.isFinite(Number(current.shares))?current.shares:"");if(sh===null)return;
+ const shares=Number(sh);if(!Number.isFinite(shares)||shares<=0){alert("Shares must be a positive number.");return}
+ const cp=prompt(`${s}: average cost per share`,Number.isFinite(Number(current.cost))?current.cost:"");if(cp===null)return;
+ const cost=Number(cp);if(!Number.isFinite(cost)||cost<=0){alert("Average cost must be a positive number.");return}
+ holdings[s]={shares,cost};save();render();showToast(`${s} holding saved`,"success");
+};
+window.removeHolding=s=>{if(confirm(`Remove ${s} from Portfolio Center?`)){delete holdings[s];save();render();showToast(`${s} removed from Portfolio Center`,"info")}};
 function render(){
  const calculatedAll=watch.map(w=>calculated({...w,...(data[w.symbol]||{})}));
+ const portfolioMode=view==="portfolio";$("portfolioCenter").hidden=!portfolioMode;$("list").hidden=portfolioMode;$("search").disabled=portfolioMode;$("sort").disabled=portfolioMode;$("portfolioCenter").style.display=portfolioMode?"block":"none";if(portfolioMode)renderPortfolio(calculatedAll);
  calculatedAll.forEach(x=>{const hit=x.hitLow||x.hitHigh;if(hit&&!alertedState[x.symbol]){alertedState[x.symbol]=true;showToast(`${x.symbol} price alert reached at ${Number.isFinite(x.price)?"$"+num(x.price):"the current price"}`,x.hitHigh?"success":"warning",6000);playAlertSound()}else if(!hit){alertedState[x.symbol]=false}});
  const all=calculatedAll.filter(x=>Number.isFinite(x.dayPct));
  $("gainers").innerHTML=mini([...all].sort((a,b)=>b.dayPct-a.dayPct));$("losers").innerHTML=mini([...all].sort((a,b)=>a.dayPct-b.dayPct));
@@ -290,7 +347,7 @@ function render(){
  ${!x.rated?`<div class="oppwhy"><b>Not yet rated:</b> Add quality and value ratings before using this stock in opportunity ranking.</div>`:Number.isFinite(x.opportunity)?`<div class="oppwhy"><b>Why it ranks here:</b> ${x.oppReasons.length?x.oppReasons.slice(0,4).join(" • "):"mixed setup"}${x.oppWarnings.length?`<br><span class="neg">Caution: ${x.oppWarnings.join(" • ")}</span>`:""}<br><span class="name">Quality/value ratings updated ${RATINGS_UPDATED}.</span></div>`:""}
  <div class="rangebar"><div class="rangefill" style="width:${Number.isFinite(x.range)?x.range:0}%"></div></div>
  <div class="bottom"><div><span class="tag">${label(x)}${Number.isFinite(x.range)?` • ${num(x.range,0)}% up range`:""}</span><div class="alerttext ${x.hitLow||x.hitHigh?"alert-hit":""}">${alertText(x)}${Number.isFinite(x.quoteAt)?` • Live quote ${new Date(x.quoteAt).toLocaleTimeString()}`:Number.isFinite(x.yearAt)?` • Cached/history ${new Date(x.yearAt).toLocaleDateString()}`:""}</div></div>
- <div class="actions"><button class="chartbtn" onclick="toggleChart('${x.symbol}')">Chart</button><button class="alertbtn" onclick="setAlert('${x.symbol}')">Alert</button><button class="remove" type="button" data-remove-symbol="${x.symbol}">${pendingRemoveSymbol===x.symbol?"Tap again":"Remove"}</button></div></div>
+ <div class="actions"><button onclick="editHolding('${x.symbol}')">Portfolio</button><button class="chartbtn" onclick="toggleChart('${x.symbol}')">Chart</button><button class="alertbtn" onclick="setAlert('${x.symbol}')">Alert</button><button class="remove" type="button" data-remove-symbol="${x.symbol}">${pendingRemoveSymbol===x.symbol?"Tap again":"Remove"}</button></div></div>
  <div id="chart-${x.symbol}" class="chartpanel ${openCharts[x.symbol]?"open":""}"><div class="charthead"><span class="charttitle">${x.symbol} chart</span><div class="charttabs">
  <button class="${(openCharts[x.symbol]?.range||"3mo")==="1d"?"active":""}" onclick="loadChart('${x.symbol}','1d',this)">1D</button><button class="${(openCharts[x.symbol]?.range||"3mo")==="1mo"?"active":""}" onclick="loadChart('${x.symbol}','1mo',this)">1M</button><button class="${(openCharts[x.symbol]?.range||"3mo")==="3mo"?"active":""}" onclick="loadChart('${x.symbol}','3mo',this)">3M</button><button class="${(openCharts[x.symbol]?.range||"3mo")==="1y"?"active":""}" onclick="loadChart('${x.symbol}','1y',this)">1Y</button>
  </div></div><div class="chartwrap"><canvas id="canvas-${x.symbol}"></canvas></div><div id="chartnote-${x.symbol}" class="chartnote">Tap a period to change the chart.</div></div>
@@ -414,6 +471,8 @@ $("refresh").onclick=refresh;$("stop").onclick=()=>stopped=true;let searchTimer;
 document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{document.querySelectorAll(".tabs button").forEach(x=>x.classList.remove("active"));b.classList.add("active");view=b.dataset.view;if(view==="opportunities")$("sort").value="opportunity";if(view==="gainers")$("sort").value="dayDesc";if(view==="losers")$("sort").value="dayAsc";if(view==="dips"||view==="nearHigh")$("sort").value="dipDesc";if(view==="belowAvg")$("sort").value="belowAvg";render()});
 $("saveKey").onclick=()=>{localStorage.setItem("finnhubKey",$("apiKey").value.trim());$("status").textContent="Finnhub key saved on this device."}
 $("add").onclick=()=>{const s=$("newTicker").value.trim().toUpperCase().replace(/\s/g,"");if(s&&!watch.some(x=>x.symbol===s)){watch.push({symbol:s,name:s});save();render()}$("newTicker").value=""}
+$("addHolding").onclick=()=>{const s=prompt("Ticker symbol to add to Portfolio Center","");if(s===null)return;const symbol=s.trim().toUpperCase();if(!symbol)return;if(!watch.some(x=>x.symbol===symbol)){watch.push({symbol,name:symbol});save()}editHolding(symbol)};
+$("clearPortfolio").onclick=()=>{if(confirm("Clear all Portfolio Center holdings?")){holdings={};save();render();showToast("Portfolio Center cleared","info")}};
 
 function collectXrayNotes(){
  const notes={};
@@ -429,7 +488,7 @@ function restoreXrayNotes(notes){
 }
 $("exportCSV").onclick=()=>{const rows=allRows(watch.map(w=>calculated({...w,...(data[w.symbol]||{})})));const esc=v=>`"${String(v??"").replace(/"/g,'""')}"`;const headers=["Symbol","Name","Price","Day Change %","2026 Gain/Loss %","Opportunity Score","2026 High","2026 Low","Range Position %"];const lines=[headers.map(esc).join(",")];for(const r of rows)lines.push([r.symbol,r.name,Number.isFinite(r.price)?r.price.toFixed(2):"",Number.isFinite(r.dayPct)?r.dayPct.toFixed(2):"",Number.isFinite(r.ytd)?r.ytd.toFixed(2):"",Number.isFinite(r.opportunity)?r.opportunity.toFixed(0):"",Number.isFinite(r.yearHigh)?r.yearHigh.toFixed(2):"",Number.isFinite(r.yearLow)?r.yearLow.toFixed(2):"",Number.isFinite(r.range)?r.range.toFixed(0):""].map(esc).join(","));const blob=new Blob([lines.join("\n")],{type:"text/csv;charset=utf-8"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=`stock-data-${new Date().toISOString().slice(0,10)}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);showToast("CSV exported","success")};
 $("export").onclick=()=>{
- const payload={version:2,exportedAt:new Date().toISOString(),watchlist:watch,alerts,openCharts,xrayNotes:collectXrayNotes(),settings:{sort:$("sort").value}};
+ const payload={version:2,exportedAt:new Date().toISOString(),watchlist:watch,alerts,openCharts,xrayNotes:collectXrayNotes(),holdings,settings:{sort:$("sort").value}};
  const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
  const url=URL.createObjectURL(blob),a=document.createElement("a");
  a.href=url;a.download=`steves-stock-board-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();
@@ -445,15 +504,15 @@ $("importFile").onchange=async e=>{
    watch=obj.watchlist.map(x=>({symbol:String(x.symbol||"").toUpperCase(),name:String(x.name||x.symbol||"")})).filter(x=>x.symbol);
    alerts=obj.alerts&&typeof obj.alerts==="object"?obj.alerts:{};
    openCharts=obj.openCharts&&typeof obj.openCharts==="object"?obj.openCharts:{};
-   restoreXrayNotes(obj.xrayNotes);
+   restoreXrayNotes(obj.xrayNotes);holdings=obj.holdings&&typeof obj.holdings==="object"?obj.holdings:{};
    if(obj.settings?.sort&&[...$("sort").options].some(o=>o.value===obj.settings.sort))$("sort").value=obj.settings.sort;
    save();render();restoreOpenCharts();$("status").textContent=`Board restored • ${watch.length} stocks loaded from backup.`;
  }catch(err){alert("That backup file could not be restored.");}
  finally{e.target.value="";}
 };
 $("reset").onclick=()=>{if(confirm("Restore the original 50-stock list?")){watch=ORIGINAL.map(x=>({symbol:x[0],name:x[1]}));data={};alerts={};openCharts={};save();render();refresh()}}
-function createAutoBackup(){const backup={version:2,exportedAt:new Date().toISOString(),watchlist:watch,alerts,openCharts,xrayNotes:typeof collectXrayNotes==="function"?collectXrayNotes():{}};try{localStorage.setItem("steveAutoBackup",JSON.stringify(backup))}catch(e){}}
-function checkAutoBackup(){const rawBackup=localStorage.getItem("steveAutoBackup");if(!rawBackup||watch.length)return;try{const b=JSON.parse(rawBackup);if(Array.isArray(b.watchlist)&&b.watchlist.length){watch=b.watchlist;alerts=b.alerts&&typeof b.alerts==="object"?b.alerts:{};openCharts=b.openCharts&&typeof b.openCharts==="object"?b.openCharts:{};if(typeof restoreXrayNotes==="function")restoreXrayNotes(b.xrayNotes);save();showToast("Auto-backup restored","info")}}catch(e){}}
+function createAutoBackup(){const backup={version:2,exportedAt:new Date().toISOString(),watchlist:watch,alerts,openCharts,xrayNotes:typeof collectXrayNotes==="function"?collectXrayNotes():{},holdings};try{localStorage.setItem("steveAutoBackup",JSON.stringify(backup))}catch(e){}}
+function checkAutoBackup(){const rawBackup=localStorage.getItem("steveAutoBackup");if(!rawBackup||watch.length)return;try{const b=JSON.parse(rawBackup);if(Array.isArray(b.watchlist)&&b.watchlist.length){watch=b.watchlist;alerts=b.alerts&&typeof b.alerts==="object"?b.alerts:{};openCharts=b.openCharts&&typeof b.openCharts==="object"?b.openCharts:{};if(typeof restoreXrayNotes==="function")restoreXrayNotes(b.xrayNotes);holdings=b.holdings&&typeof b.holdings==="object"?b.holdings:{};save();showToast("Auto-backup restored","info")}}catch(e){}}
 function startAuto(){if(autoTimer)clearInterval(autoTimer);if(backupTimer)clearInterval(backupTimer);autoTimer=setInterval(()=>{if(!document.hidden)refresh()},AUTO_REFRESH_MS);backupTimer=setInterval(createAutoBackup,3600000)}
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)refresh()});
 let resizeTimer;
