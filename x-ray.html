@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#07090c">
 <meta name="description" content="Steve's Stock X-Ray — valuation, fundamentals, news, analyst ratings and an explained research score.">
-<title>Steve's Stock X-Ray 6.3</title>
+<title>Steve's Stock X-Ray 6.4</title>
 <style>
 :root{
   --bg:#07090c;--panel:#11161d;--panel2:#171e27;--text:#f5f7fa;--muted:#9ba8b7;
@@ -82,7 +82,7 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
 </head>
 <body>
 <header>
-  <div class="headerline"><div><h1>Steve's Stock X-Ray 6.3</h1><div class="sub">Fast decisions with a five-second summary, Board context, score history, price zones and explained scoring</div></div><button id="backBtn">Board</button></div>
+  <div class="headerline"><div><h1>Steve's Stock X-Ray 6.4</h1><div class="sub">Fast decisions with a five-second summary, Board context, score history, price zones and explained scoring</div></div><button id="backBtn">Board</button></div>
 </header>
 <main>
   <div class="searchbar">
@@ -285,7 +285,7 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
   </div>
 
   <details>
-    <summary>What’s new in Version 6.3 <span class="releaseBadge">NEW</span></summary>
+    <summary>What’s new in Version 6.4 <span class="releaseBadge">NEW</span></summary>
     <div class="note" style="margin-top:10px">Added Yahoo fundamentals time-series fallback • calculates growth, margins, cash flow and balance-sheet ratios when summary feeds omit them • improved analyst and dividend field mapping • retains the 6.1 retry and Board-cache protections.</div>
   </details>
 
@@ -629,19 +629,36 @@ async function yahooQuoteFallback(symbol){
 }
 
 function yahooSeriesType(row){
- return row?.meta?.type||row?.type||Object.keys(row||{}).find(k=>k!=="meta"&&k!=="timestamp")||"";
+ const declared=String(row?.meta?.type||row?.type||"").trim();
+ if(declared)return declared;
+ const keys=Object.keys(row||{}).filter(k=>k!=="meta"&&k!=="timestamp"&&Array.isArray(row?.[k]));
+ return keys[0]||Object.keys(row||{}).find(k=>k!=="meta"&&k!=="timestamp")||"";
 }
-function yahooSeriesPoints(row){
- const key=yahooSeriesType(row),arr=Array.isArray(row?.[key])?row[key]:[];
- return arr.map(x=>({time:Number(x?.asOfDate||x?.timestamp||0),value:raw(x?.reportedValue)})).filter(x=>finite(x.value)).sort((a,b)=>a.time-b.time);
+function yahooSeriesMatch(row,type){
+ const wanted=String(type||"").toLowerCase();
+ if(!wanted)return false;
+ const candidates=[
+  yahooSeriesType(row),row?.meta?.type,row?.type,
+  ...Object.keys(row||{}).filter(k=>k!=="meta"&&k!=="timestamp")
+ ].filter(Boolean).map(x=>String(x).toLowerCase());
+ return candidates.some(x=>x===wanted||x.includes(wanted)||wanted.includes(x));
+}
+function yahooSeriesDataKey(row,type){
+ const wanted=String(type||"").toLowerCase();
+ const keys=Object.keys(row||{}).filter(k=>k!=="meta"&&k!=="timestamp"&&Array.isArray(row?.[k]));
+ return keys.find(k=>k.toLowerCase()===wanted)||keys.find(k=>k.toLowerCase().includes(wanted)||wanted.includes(k.toLowerCase()))||keys[0]||"";
+}
+function yahooSeriesPoints(row,type){
+ const key=yahooSeriesDataKey(row,type||yahooSeriesType(row)),arr=key&&Array.isArray(row?.[key])?row[key]:[];
+ return arr.map(x=>({time:Number(x?.asOfDate||x?.timestamp||0),value:raw(x?.reportedValue??x)})).filter(x=>finite(x.value)).sort((a,b)=>a.time-b.time);
 }
 function yahooSeriesLatest(data,type){
- const row=(data?.result||[]).find(x=>yahooSeriesType(x)===type);
- const pts=yahooSeriesPoints(row);return pts.length?Number(pts.at(-1).value):null;
+ const row=(data?.result||[]).find(x=>yahooSeriesMatch(x,type));
+ const pts=yahooSeriesPoints(row,type);return pts.length?Number(pts.at(-1).value):null;
 }
 function yahooSeriesGrowth(data,type){
- const row=(data?.result||[]).find(x=>yahooSeriesType(x)===type);
- const pts=yahooSeriesPoints(row);if(pts.length<2)return null;
+ const row=(data?.result||[]).find(x=>yahooSeriesMatch(x,type));
+ const pts=yahooSeriesPoints(row,type);if(pts.length<2)return null;
  const a=Number(pts.at(-2).value),b=Number(pts.at(-1).value);
  return finite(a)&&finite(b)&&a!==0?(b/a-1)*100:null;
 }
