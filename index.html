@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#07090c">
 <meta name="description" content="Steve's Stock Board — live quotes, ranked opportunities, charts, alerts, and watchlist backup.">
-<title>Steve's Stock Board 5.2</title>
+<title>Steve's Stock Board 5.3</title>
 <style>
 :root{--bg:#07090c;--panel:#11161d;--panel2:#171e27;--text:#f5f7fa;--muted:#9ba8b7;--line:#29323e;--green:#21d765;--red:#ff6257;--blue:#67adff;--gold:#ffd166}
 *{box-sizing:border-box}
@@ -335,7 +335,7 @@ function renderPortfolio(calculatedAll){
  $("portfolioCount").textContent=String(enriched.length);
  $("portfolioList").innerHTML=enriched.length?enriched.map(x=>{
    const weight=totalValue>0?x.positionValue/totalValue*100:null;
-   return `<article class="holding"><div class="holdingTop"><div><div class="symbol"><a href="x-ray.html?ticker=${encodeURIComponent(x.symbol)}">${x.symbol}</a></div><div class="company">${x.name}</div></div><div><div class="price">$${num(x.positionValue)}</div><div class="day ${cls(x.gain)}">${x.gain>=0?"+":"-"}$${num(Math.abs(x.gain))} • ${pct(x.gainPct)}</div></div></div>
+   return `<article class="holding"><div class="holdingTop"><div><div class="symbol"><a class="xray-link" data-xray-symbol="${x.symbol}" href="x-ray.html?ticker=${encodeURIComponent(x.symbol)}">${x.symbol}</a></div><div class="company">${x.name}</div></div><div><div class="price">$${num(x.positionValue)}</div><div class="day ${cls(x.gain)}">${x.gain>=0?"+":"-"}$${num(Math.abs(x.gain))} • ${pct(x.gainPct)}</div></div></div>
    <div class="holdingGrid"><div class="metric"><div class="label">Shares</div><div class="value">${num(x.shares,4)}</div></div><div class="metric"><div class="label">Average cost</div><div class="value">$${num(x.cost)}</div></div><div class="metric"><div class="label">Current price</div><div class="value">${Number.isFinite(x.price)?"$"+num(x.price):"—"}</div></div><div class="metric"><div class="label">Portfolio weight</div><div class="value">${Number.isFinite(weight)?num(weight,1)+"%":"—"}</div></div><div class="metric"><div class="label">Board opportunity</div><div class="value">${Number.isFinite(x.opportunity)?num(x.opportunity,0)+"/100":"—"}</div></div><div class="metric"><div class="label">Quality</div><div class="value">${Number.isFinite(x.quality)?num(x.quality,0):"—"}</div></div><div class="metric"><div class="label">Value</div><div class="value">${Number.isFinite(x.value)?num(x.value,0):"—"}</div></div><div class="metric"><div class="label">Below 2026 high</div><div class="value">${Number.isFinite(x.belowHigh)?num(Math.abs(x.belowHigh),1)+"%":"—"}</div></div></div>
    <div class="holdingAction"><b>Portfolio guide:</b> ${portfolioAction(x,x.gainPct)}</div><div class="actions" style="margin-top:9px"><button onclick="editHolding('${x.symbol}')">Edit holding</button><button class="remove" onclick="removeHolding('${x.symbol}')">Remove holding</button></div></article>`;
  }).join(""):'<div class="portfolioEmpty">No holdings entered yet. Tap “Add holding,” or use the Portfolio button on any stock card.</div>';
@@ -361,11 +361,32 @@ function saveXrayContext(x,total){
    quoteAt:Number.isFinite(x.quoteAt)?x.quoteAt:null,yearAt:Number.isFinite(x.yearAt)?x.yearAt:null,savedAt:Date.now()
   };
   localStorage.setItem("stockBoardContext",JSON.stringify(context));
+  localStorage.setItem(`stockBoardContext:${x.symbol}`,JSON.stringify(context));
  }catch(e){console.warn("Could not pass Board context to X-Ray",e)}
  return true;
 }
+function saveFullXrayCache(rows){
+ try{
+  const ranked=[...rows].filter(v=>Number.isFinite(v.opportunity)).sort((a,b)=>b.opportunity-a.opportunity);
+  const rankMap=new Map(ranked.map((v,i)=>[v.symbol,i+1]));
+  const cache={version:2,savedAt:Date.now(),total:ranked.length||rows.length,stocks:{}};
+  for(const x of rows){
+   cache.stocks[x.symbol]={
+    symbol:x.symbol,name:x.name,rank:rankMap.get(x.symbol)||null,total:cache.total,
+    score:Number.isFinite(x.opportunity)?x.opportunity:null,quality:Number.isFinite(x.quality)?x.quality:null,value:Number.isFinite(x.value)?x.value:null,
+    price:Number.isFinite(x.price)?x.price:null,dayPct:Number.isFinite(x.dayPct)?x.dayPct:null,dayDollar:Number.isFinite(x.dayDollar)?x.dayDollar:null,
+    previousClose:Number.isFinite(x.prev)?x.prev:null,yearHigh:Number.isFinite(x.yearHigh)?x.yearHigh:null,yearLow:Number.isFinite(x.yearLow)?x.yearLow:null,
+    yearAvg:Number.isFinite(x.yearAvg)?x.yearAvg:null,yearFirst:Number.isFinite(x.yearFirst)?x.yearFirst:null,belowHigh:Number.isFinite(x.belowHigh)?x.belowHigh:null,
+    aboveLow:Number.isFinite(x.aboveLow)?x.aboveLow:null,ytd:Number.isFinite(x.ytd)?x.ytd:null,range:Number.isFinite(x.range)?x.range:null,
+    vsAvg:Number.isFinite(x.vsAvg)?x.vsAvg:null,quoteAt:Number.isFinite(x.quoteAt)?x.quoteAt:null,yearAt:Number.isFinite(x.yearAt)?x.yearAt:null,savedAt:Date.now()
+   };
+  }
+  localStorage.setItem("steveXrayBoardCacheV2",JSON.stringify(cache));
+ }catch(e){console.warn("Could not save full Board cache",e)}
+}
 function render(){
  const calculatedAll=watch.map(w=>calculated({...w,...(data[w.symbol]||{})}));
+ saveFullXrayCache(calculatedAll);
  const portfolioMode=view==="portfolio";$("portfolioCenter").hidden=!portfolioMode;$("list").hidden=portfolioMode;$("search").disabled=portfolioMode;$("sort").disabled=portfolioMode;$("portfolioCenter").style.display=portfolioMode?"block":"none";if(portfolioMode)renderPortfolio(calculatedAll);
  calculatedAll.forEach(x=>{const hit=x.hitLow||x.hitHigh;if(hit&&!alertedState[x.symbol]){alertedState[x.symbol]=true;showToast(`${x.symbol} price alert reached at ${Number.isFinite(x.price)?"$"+num(x.price):"the current price"}`,x.hitHigh?"success":"warning",6000);playAlertSound()}else if(!hit){alertedState[x.symbol]=false}});
  const all=calculatedAll.filter(x=>Number.isFinite(x.dayPct));
