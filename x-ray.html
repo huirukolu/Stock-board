@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#07090c">
 <meta name="description" content="Steve's Stock X-Ray — valuation, fundamentals, news, analyst ratings and an explained research score.">
-<title>Steve's Stock X-Ray 6.1</title>
+<title>Steve's Stock X-Ray 6.2</title>
 <style>
 :root{
   --bg:#07090c;--panel:#11161d;--panel2:#171e27;--text:#f5f7fa;--muted:#9ba8b7;
@@ -82,7 +82,7 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
 </head>
 <body>
 <header>
-  <div class="headerline"><div><h1>Steve's Stock X-Ray 6.1</h1><div class="sub">Fast decisions with a five-second summary, Board context, score history, price zones and explained scoring</div></div><button id="backBtn">Board</button></div>
+  <div class="headerline"><div><h1>Steve's Stock X-Ray 6.2</h1><div class="sub">Fast decisions with a five-second summary, Board context, score history, price zones and explained scoring</div></div><button id="backBtn">Board</button></div>
 </header>
 <main>
   <div class="searchbar">
@@ -285,8 +285,8 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
   </div>
 
   <details>
-    <summary>What’s new in Version 6.1 <span class="releaseBadge">NEW</span></summary>
-    <div class="note" style="margin-top:10px">Controlled retries for temporary Yahoo/Finnhub failures • clearer source diagnostics • Board cache remains visible when live feeds fail • comparison requests no longer disturb the primary X-Ray.</div>
+    <summary>What’s new in Version 6.2 <span class="releaseBadge">NEW</span></summary>
+    <div class="note" style="margin-top:10px">Added Yahoo fundamentals time-series fallback • calculates growth, margins, cash flow and balance-sheet ratios when summary feeds omit them • improved analyst and dividend field mapping • retains the 6.1 retry and Board-cache protections.</div>
   </details>
 
   <details>
@@ -300,7 +300,7 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
 </main>
 <script>
 const $=id=>document.getElementById(id);
-const state={symbol:"",name:"",quote:{},profile:{},metrics:{},summary:{},recommendations:[],news:[],scores:{},confidence:0,dataConfidence:0,investmentConfidence:0,overall:null,verdict:"",compare:null,industry:null,boardData:null,boardFallbackUsed:false};
+const state={symbol:"",name:"",quote:{},profile:{},metrics:{},summary:{},yahooFundamentals:{},recommendations:[],news:[],scores:{},confidence:0,dataConfidence:0,investmentConfidence:0,overall:null,verdict:"",compare:null,industry:null,boardData:null,boardFallbackUsed:false};
 let compareInProgress=false;
 $("apiKey").value=localStorage.getItem("finnhubKey")||"";
 window.addEventListener("storage",e=>{if(e.key==="finnhubKey"&&$("apiKey"))$("apiKey").value=e.newValue||""});
@@ -618,6 +618,42 @@ async function yahooQuoteFallback(symbol){
  const x=j?.quoteResponse?.result?.[0];if(!x)throw Error("Yahoo quote unavailable");
  return x;
 }
+
+function yahooSeriesType(row){
+ return row?.meta?.type||row?.type||Object.keys(row||{}).find(k=>k!=="meta"&&k!=="timestamp")||"";
+}
+function yahooSeriesPoints(row){
+ const key=yahooSeriesType(row),arr=Array.isArray(row?.[key])?row[key]:[];
+ return arr.map(x=>({time:Number(x?.asOfDate||x?.timestamp||0),value:raw(x?.reportedValue)})).filter(x=>finite(x.value)).sort((a,b)=>a.time-b.time);
+}
+function yahooSeriesLatest(data,type){
+ const row=(data?.result||[]).find(x=>yahooSeriesType(x)===type);
+ const pts=yahooSeriesPoints(row);return pts.length?Number(pts.at(-1).value):null;
+}
+function yahooSeriesGrowth(data,type){
+ const row=(data?.result||[]).find(x=>yahooSeriesType(x)===type);
+ const pts=yahooSeriesPoints(row);if(pts.length<2)return null;
+ const a=Number(pts.at(-2).value),b=Number(pts.at(-1).value);
+ return finite(a)&&finite(b)&&a!==0?(b/a-1)*100:null;
+}
+async function yahooFundamentalsFallback(symbol){
+ const period2=Math.floor(Date.now()/1000),period1=period2-8*365*86400;
+ const groups=[
+  ["trailingMarketCap","trailingPeRatio","forwardPeRatio","trailingPriceToSales","quarterlyPriceToBook","trailingPegRatio","trailingEps","trailingDividendYield","trailingPayoutRatio"],
+  ["annualTotalRevenue","annualDilutedEPS","annualGrossProfit","annualOperatingIncome","annualNetIncome","annualStockholdersEquity","annualCurrentAssets","annualCurrentLiabilities","annualTotalDebt","annualCashCashEquivalentsAndShortTermInvestments"],
+  ["trailingTotalRevenue","trailingGrossProfit","trailingOperatingIncome","trailingNetIncome","trailingFreeCashFlow","trailingEBITDA","trailingTotalCash","trailingTotalDebt"]
+ ];
+ const settled=await Promise.allSettled(groups.map(types=>{
+  const path=`/ws/fundamentals-timeseries/v1/finance/timeseries/${encodeURIComponent(symbol)}?symbol=${encodeURIComponent(symbol)}&type=${types.join(",")}&period1=${period1}&period2=${period2}`;
+  return tryUrls(yahooUrls(path));
+ }));
+ const result=[];
+ for(const r of settled)if(r.status==="fulfilled"){
+  const rows=r.value?.timeseries?.result||[];for(const row of rows)result.push(row);
+ }
+ if(!result.length)throw Error("Yahoo fundamentals time-series unavailable");
+ return{result};
+}
 function mergeDeep(target,source){
  if(!source||typeof source!=="object")return target;
  for(const [k,v] of Object.entries(source)){
@@ -649,6 +685,7 @@ async function loadAll(symbol){
  }
  add("Yahoo quote",yahooQuoteFallback(symbol));
  add("Yahoo chart",yahooChartFallback(symbol));
+ add("Yahoo fundamentals time-series",yahooFundamentalsFallback(symbol));
  const groups=[
   ["Yahoo valuation","price,summaryDetail,defaultKeyStatistics"],
   ["Yahoo fundamentals","financialData"],
@@ -659,7 +696,7 @@ async function loadAll(symbol){
   add(name,tryUrls(yahooUrls(path)));
  }
  const r=await Promise.allSettled(jobs);
- state.quote={};state.profile={};state.metrics={};state.recommendations=[];state.news=[];state.summary={};
+ state.quote={};state.profile={};state.metrics={};state.yahooFundamentals={};state.recommendations=[];state.news=[];state.summary={};
  for(let i=0;i<r.length;i++){
   if(r[i].status!=="fulfilled")continue;
   const name=names[i],v=r[i].value;
@@ -674,6 +711,14 @@ async function loadAll(symbol){
    state.summary.price=mergeDeep(state.summary.price||{}, {longName:v.longName,shortName:v.shortName,regularMarketPrice:{raw:v.regularMarketPrice},marketCap:{raw:v.marketCap}});
    state.summary.summaryDetail=mergeDeep(state.summary.summaryDetail||{}, {fiftyTwoWeekHigh:{raw:v.fiftyTwoWeekHigh},fiftyTwoWeekLow:{raw:v.fiftyTwoWeekLow},trailingPE:{raw:v.trailingPE},forwardPE:{raw:v.forwardPE},dividendYield:{raw:v.dividendYield}});
    state.summary.defaultKeyStatistics=mergeDeep(state.summary.defaultKeyStatistics||{}, {priceToBook:{raw:v.priceToBook},pegRatio:{raw:v.pegRatio},beta:{raw:v.beta},trailingEps:{raw:v.epsTrailingTwelveMonths},forwardPE:{raw:v.forwardPE}});
+   state.summary.financialData=mergeDeep(state.summary.financialData||{}, {
+    targetMeanPrice:{raw:first(v.targetPriceMean,v.targetMeanPrice)},targetHighPrice:{raw:v.targetPriceHigh},targetLowPrice:{raw:v.targetPriceLow},
+    recommendationMean:{raw:v.recommendationMean},recommendationKey:v.recommendationKey,numberOfAnalystOpinions:{raw:v.numberOfAnalystOpinions},
+    totalCash:{raw:v.totalCash},totalDebt:{raw:v.totalDebt},freeCashflow:{raw:v.freeCashflow},ebitda:{raw:v.ebitda},
+    revenueGrowth:{raw:v.revenueGrowth},earningsGrowth:{raw:v.earningsGrowth},grossMargins:{raw:v.grossMargins},operatingMargins:{raw:v.operatingMargins},profitMargins:{raw:v.profitMargins},returnOnEquity:{raw:v.returnOnEquity}
+   });
+  }else if(name==="Yahoo fundamentals time-series"){
+   state.yahooFundamentals=v||{};
   }else if(name==="Yahoo chart"){
    const c=v||{};if(!finite(state.quote.c)&&finite(c.price)){state.quote.c=c.price;state.quote.pc=c.previousClose}
    state.summary.summaryDetail=state.summary.summaryDetail||{};
@@ -691,28 +736,29 @@ async function loadAll(symbol){
  return {success:successes.length,total:r.length,boardFallback:state.boardFallbackUsed,errors:failures};
 }
 function compute(){
- const q=state.quote,m=state.metrics,s=state.summary;
+ const q=state.quote,m=state.metrics,s=state.summary,y=state.yahooFundamentals||{};
+ const yv=type=>yahooSeriesLatest(y,type),yg=type=>yahooSeriesGrowth(y,type);
  const price=first(q.c,raw(s.price?.regularMarketPrice));
- const pe=first(m.peTTM,raw(s.summaryDetail?.trailingPE),raw(s.defaultKeyStatistics?.trailingPE));
- const fpe=first(m.forwardPE,raw(s.summaryDetail?.forwardPE),raw(s.defaultKeyStatistics?.forwardPE));
- const eps=first(m.epsTTM,raw(s.defaultKeyStatistics?.trailingEps));
- const ps=first(m.psTTM,raw(s.summaryDetail?.priceToSalesTrailing12Months));
- const pb=first(m.pbAnnual,raw(s.defaultKeyStatistics?.priceToBook));
- const peg=first(m.pegRatio,raw(s.defaultKeyStatistics?.pegRatio));
- const revGrowth=first(m.revenueGrowthTTMYoy,raw(s.financialData?.revenueGrowth)!=null?raw(s.financialData?.revenueGrowth)*100:null);
- const epsGrowth=first(m.epsGrowthTTMYoy,raw(s.financialData?.earningsGrowth)!=null?raw(s.financialData?.earningsGrowth)*100:null);
- const grossMargin=first(m.grossMarginTTM,raw(s.financialData?.grossMargins)!=null?raw(s.financialData?.grossMargins)*100:null);
- const operatingMargin=first(m.operatingMarginTTM,raw(s.financialData?.operatingMargins)!=null?raw(s.financialData?.operatingMargins)*100:null);
- const netMargin=first(m.netProfitMarginTTM,raw(s.financialData?.profitMargins)!=null?raw(s.financialData?.profitMargins)*100:null);
- const roe=first(m.roeTTM,m.roeRfy);
- const currentRatio=first(m.currentRatioQuarterly,m.currentRatioAnnual);
- const debtEquity=first(m.totalDebtToEquityQuarterly,m.totalDebtToEquityAnnual);
- const fcf=first(raw(s.financialData?.freeCashflow),m.freeCashFlowTTM);
- const cash=first(raw(s.financialData?.totalCash));
- const debt=first(raw(s.financialData?.totalDebt));
- const ebitda=first(raw(s.financialData?.ebitda),m.ebitdaTTM);
- const roic=first(m.roicTTM,m.roicAnnual);
- const ebitdaMargin=first(m.ebitdaMarginTTM,m.ebitdaMarginAnnual);
+ const pe=first(m.peTTM,raw(s.summaryDetail?.trailingPE),raw(s.defaultKeyStatistics?.trailingPE),yv("trailingPeRatio"));
+ const fpe=first(m.forwardPE,raw(s.summaryDetail?.forwardPE),raw(s.defaultKeyStatistics?.forwardPE),yv("forwardPeRatio"));
+ const eps=first(m.epsTTM,raw(s.defaultKeyStatistics?.trailingEps),yv("trailingEps"));
+ const ps=first(m.psTTM,raw(s.summaryDetail?.priceToSalesTrailing12Months),yv("trailingPriceToSales"));
+ const pb=first(m.pbAnnual,raw(s.defaultKeyStatistics?.priceToBook),yv("quarterlyPriceToBook"));
+ const peg=first(m.pegRatio,raw(s.defaultKeyStatistics?.pegRatio),yv("trailingPegRatio"));
+ const revGrowth=first(m.revenueGrowthTTMYoy,raw(s.financialData?.revenueGrowth)!=null?raw(s.financialData?.revenueGrowth)*100:null,yg("annualTotalRevenue"));
+ const epsGrowth=first(m.epsGrowthTTMYoy,raw(s.financialData?.earningsGrowth)!=null?raw(s.financialData?.earningsGrowth)*100:null,yg("annualDilutedEPS"));
+ const grossMargin=first(m.grossMarginTTM,raw(s.financialData?.grossMargins)!=null?raw(s.financialData?.grossMargins)*100:null,finite(yv("trailingGrossProfit"))&&finite(yv("trailingTotalRevenue"))&&yv("trailingTotalRevenue")!==0?yv("trailingGrossProfit")/yv("trailingTotalRevenue")*100:null,finite(yv("annualGrossProfit"))&&finite(yv("annualTotalRevenue"))&&yv("annualTotalRevenue")!==0?yv("annualGrossProfit")/yv("annualTotalRevenue")*100:null);
+ const operatingMargin=first(m.operatingMarginTTM,raw(s.financialData?.operatingMargins)!=null?raw(s.financialData?.operatingMargins)*100:null,finite(yv("trailingOperatingIncome"))&&finite(yv("trailingTotalRevenue"))&&yv("trailingTotalRevenue")!==0?yv("trailingOperatingIncome")/yv("trailingTotalRevenue")*100:null,finite(yv("annualOperatingIncome"))&&finite(yv("annualTotalRevenue"))&&yv("annualTotalRevenue")!==0?yv("annualOperatingIncome")/yv("annualTotalRevenue")*100:null);
+ const netMargin=first(m.netProfitMarginTTM,raw(s.financialData?.profitMargins)!=null?raw(s.financialData?.profitMargins)*100:null,finite(yv("trailingNetIncome"))&&finite(yv("trailingTotalRevenue"))&&yv("trailingTotalRevenue")!==0?yv("trailingNetIncome")/yv("trailingTotalRevenue")*100:null,finite(yv("annualNetIncome"))&&finite(yv("annualTotalRevenue"))&&yv("annualTotalRevenue")!==0?yv("annualNetIncome")/yv("annualTotalRevenue")*100:null);
+ const roe=first(m.roeTTM,m.roeRfy,raw(s.financialData?.returnOnEquity)!=null?raw(s.financialData?.returnOnEquity)*100:null,finite(yv("annualNetIncome"))&&finite(yv("annualStockholdersEquity"))&&yv("annualStockholdersEquity")!==0?yv("annualNetIncome")/yv("annualStockholdersEquity")*100:null);
+ const currentRatio=first(m.currentRatioQuarterly,m.currentRatioAnnual,finite(yv("annualCurrentAssets"))&&finite(yv("annualCurrentLiabilities"))&&yv("annualCurrentLiabilities")!==0?yv("annualCurrentAssets")/yv("annualCurrentLiabilities"):null);
+ const debtEquity=first(m.totalDebtToEquityQuarterly,m.totalDebtToEquityAnnual,finite(yv("trailingTotalDebt"))&&finite(yv("annualStockholdersEquity"))&&yv("annualStockholdersEquity")!==0?yv("trailingTotalDebt")/yv("annualStockholdersEquity")*100:null,finite(yv("annualTotalDebt"))&&finite(yv("annualStockholdersEquity"))&&yv("annualStockholdersEquity")!==0?yv("annualTotalDebt")/yv("annualStockholdersEquity")*100:null);
+ const fcf=first(raw(s.financialData?.freeCashflow),m.freeCashFlowTTM,yv("trailingFreeCashFlow"));
+ const cash=first(raw(s.financialData?.totalCash),yv("trailingTotalCash"),yv("annualCashCashEquivalentsAndShortTermInvestments"));
+ const debt=first(raw(s.financialData?.totalDebt),yv("trailingTotalDebt"),yv("annualTotalDebt"));
+ const ebitda=first(raw(s.financialData?.ebitda),m.ebitdaTTM,yv("trailingEBITDA"));
+ const roic=first(m.roicTTM,m.roicAnnual,finite(yv("trailingOperatingIncome"))&&finite(debt)&&finite(yv("annualStockholdersEquity"))?yv("trailingOperatingIncome")*.79/Math.max(1,debt+yv("annualStockholdersEquity")-(cash||0))*100:null);
+ const ebitdaMargin=first(m.ebitdaMarginTTM,m.ebitdaMarginAnnual,finite(ebitda)&&finite(yv("trailingTotalRevenue"))&&yv("trailingTotalRevenue")!==0?ebitda/yv("trailingTotalRevenue")*100:null);
  const targetCandidate=firstPositive(raw(s.financialData?.targetMeanPrice),m.targetMeanPrice,m.priceTargetMean);
  const target=finite(targetCandidate)&&finite(price)&&targetCandidate>price*0.25&&targetCandidate<price*4?targetCandidate:null;
  const analystUpside=finite(target)&&finite(price)&&price>0?(target/price-1)*100:null;
@@ -735,8 +781,8 @@ function compute(){
    finite(belowHigh)?(Math.abs(belowHigh)>=8&&Math.abs(belowHigh)<=25?85:Math.abs(belowHigh)<8?60:Math.abs(belowHigh)<=40?55:25):null,
    scoreLinear(raw(m.yearToDatePriceReturnDaily),-25,30)
  ]);
- const dividendYield=first(m.dividendYieldIndicatedAnnual,raw(s.summaryDetail?.dividendYield)!=null?raw(s.summaryDetail?.dividendYield)*100:null);
- const payoutRatio=first(m.payoutRatioTTM,raw(s.summaryDetail?.payoutRatio)!=null?raw(s.summaryDetail?.payoutRatio)*100:null);
+ const dividendYield=first(m.dividendYieldIndicatedAnnual,raw(s.summaryDetail?.dividendYield)!=null?raw(s.summaryDetail?.dividendYield)*100:null,finite(yv("trailingDividendYield"))?yv("trailingDividendYield")*100:null);
+ const payoutRatio=first(m.payoutRatioTTM,raw(s.summaryDetail?.payoutRatio)!=null?raw(s.summaryDetail?.payoutRatio)*100:null,finite(yv("trailingPayoutRatio"))?yv("trailingPayoutRatio")*100:null);
  const dividend=average([
    scoreLinear(dividendYield,0,6),
    finite(payoutRatio)?(payoutRatio>0&&payoutRatio<65?85:payoutRatio<85?60:payoutRatio<=0?25:30):null
@@ -1267,7 +1313,7 @@ function render(){
  ].join("");
  $("balance").innerHTML=[
    metric("Current ratio",finite(d.currentRatio)?fmt(d.currentRatio,2):"Not available"),metric("Debt / equity",finite(d.debtEquity)&&d.debtEquity!==0?fmt(d.debtEquity,1)+"%":"Not available"),metric("Cash",displayCompactMoney(d.cash)),metric("Debt",displayCompactMoney(d.debt)),
-   metric("Free cash flow",displayCompactMoney(d.fcf)),metric("FCF / share",displayMoney(state.metrics.freeCashFlowPerShareTTM)),metric("Market cap",displayCompactMoney(first(state.profile.marketCapitalization?state.profile.marketCapitalization*1e6:null,raw(state.summary.price?.marketCap)))),metric("Dividend yield",finite(d.dividendYield)?pct(d.dividendYield):"Not available"),metric("Payout ratio",finite(d.payoutRatio)?pct(d.payoutRatio):"Not available")
+   metric("Free cash flow",displayCompactMoney(d.fcf)),metric("FCF / share",displayMoney(state.metrics.freeCashFlowPerShareTTM)),metric("Market cap",displayCompactMoney(first(state.profile.marketCapitalization?state.profile.marketCapitalization*1e6:null,raw(state.summary.price?.marketCap),yahooSeriesLatest(state.yahooFundamentals,"trailingMarketCap")))),metric("Dividend yield",finite(d.dividendYield)?pct(d.dividendYield):"Not available"),metric("Payout ratio",finite(d.payoutRatio)?pct(d.payoutRatio):"Not available")
  ].join("");
  const r=state.recommendations[0]||{};
  $("analysts").innerHTML=[
