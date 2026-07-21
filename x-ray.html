@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#07090c">
 <meta name="description" content="Steve's Stock X-Ray — valuation, fundamentals, news, analyst ratings and an explained research score.">
-<title>Steve's Stock X-Ray 6.0</title>
+<title>Steve's Stock X-Ray 6.1</title>
 <style>
 :root{
   --bg:#07090c;--panel:#11161d;--panel2:#171e27;--text:#f5f7fa;--muted:#9ba8b7;
@@ -82,7 +82,7 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
 </head>
 <body>
 <header>
-  <div class="headerline"><div><h1>Steve's Stock X-Ray 6.0</h1><div class="sub">Fast decisions with a five-second summary, Board context, score history, price zones and explained scoring</div></div><button id="backBtn">Board</button></div>
+  <div class="headerline"><div><h1>Steve's Stock X-Ray 6.1</h1><div class="sub">Fast decisions with a five-second summary, Board context, score history, price zones and explained scoring</div></div><button id="backBtn">Board</button></div>
 </header>
 <main>
   <div class="searchbar">
@@ -285,8 +285,8 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
   </div>
 
   <details>
-    <summary>What’s new in Version 5.8 <span class="releaseBadge">NEW</span></summary>
-    <div class="note" style="margin-top:10px">Confidence gate prevents Buy/Hold/Avoid calls when data is incomplete • Opportunity becomes unavailable when its core inputs are missing • price zones require dependable data • clearer low-confidence explanations.</div>
+    <summary>What’s new in Version 6.1 <span class="releaseBadge">NEW</span></summary>
+    <div class="note" style="margin-top:10px">Controlled retries for temporary Yahoo/Finnhub failures • clearer source diagnostics • Board cache remains visible when live feeds fail • comparison requests no longer disturb the primary X-Ray.</div>
   </details>
 
   <details>
@@ -531,10 +531,22 @@ function debtScore(v){
  if(v<20)return 100;if(v<50)return 88;if(v<100)return 70;if(v<160)return 45;if(v<250)return 25;return 10;
 }
 function average(vals){const a=vals.filter(finite).map(Number);return a.length?a.reduce((x,y)=>x+y,0)/a.length:null}
-async function fetchTimeout(url,opts={},ms=14000){
- const c=new AbortController(),t=setTimeout(()=>c.abort(),ms);
- try{const r=await fetch(url,{...opts,signal:c.signal,cache:"no-store"});if(!r.ok)throw Error(`HTTP ${r.status}`);return await r.json()}
- finally{clearTimeout(t)}
+async function fetchTimeout(url,opts={},ms=14000,retries=1){
+ let last;
+ for(let attempt=0;attempt<=retries;attempt++){
+  const c=new AbortController(),t=setTimeout(()=>c.abort(),ms);
+  try{
+   const r=await fetch(url,{...opts,signal:c.signal,cache:"no-store"});
+   if(!r.ok)throw Error(`HTTP ${r.status}`);
+   const j=await r.json();
+   if(!j||typeof j!=="object")throw Error("Invalid JSON response");
+   return j;
+  }catch(e){
+   last=e;
+   if(attempt<retries)await new Promise(r=>setTimeout(r,700*(attempt+1)));
+  }finally{clearTimeout(t)}
+ }
+ throw last||Error("Data request failed");
 }
 function yahooUrls(path){
  const a=`https://query1.finance.yahoo.com${path}`,b=`https://query2.finance.yahoo.com${path}`;
@@ -546,14 +558,25 @@ async function tryUrls(urls){
 async function finnhub(path,key){
  if(!key)throw Error("Finnhub key missing");
  const url=`https://finnhub.io/api/v1/${path}${path.includes("?")?"&":"?"}token=${encodeURIComponent(key)}`;
- const c=new AbortController(),t=setTimeout(()=>c.abort(),14000);
- try{
-  const r=await fetch(url,{signal:c.signal,cache:"no-store"});
-  if(r.status===401||r.status===403)throw Error("Finnhub key was rejected");
-  if(r.status===429)throw Error("Finnhub rate limit reached — try again shortly");
-  if(!r.ok)throw Error(`Finnhub HTTP ${r.status}`);
-  return await r.json();
- }finally{clearTimeout(t)}
+ let last;
+ for(let attempt=0;attempt<2;attempt++){
+  const c=new AbortController(),t=setTimeout(()=>c.abort(),14000);
+  try{
+   const r=await fetch(url,{signal:c.signal,cache:"no-store"});
+   if(r.status===401||r.status===403)throw Error("Finnhub key was rejected");
+   if(r.status===429)throw Error("Finnhub rate limit reached — try again shortly");
+   if(!r.ok)throw Error(`Finnhub HTTP ${r.status}`);
+   const j=await r.json();
+   if(!j||typeof j!=="object")throw Error("Invalid Finnhub response");
+   return j;
+  }catch(e){
+   last=e;
+   const msg=String(e?.message||e);
+   if(/rejected|rate limit/i.test(msg))throw e;
+   if(attempt===0)await new Promise(r=>setTimeout(r,800));
+  }finally{clearTimeout(t)}
+ }
+ throw last||Error("Finnhub unavailable");
 }
 function getBoardCache(symbol){
  let context=null;
@@ -1309,9 +1332,9 @@ async function analyze(){
  try{
    const result=await loadAll(symbol);
    compute();render();
-   const limited=result.success<3?" Some free-data sections were unavailable.":"";
+   const limited=result.success<3?" Some free-data sections were unavailable.":result.success<result.total?" Some optional sections were unavailable.":"";
    const cacheNote=result.boardFallback?" Board cache was used as a fallback.":"";
-   $("status").textContent=`X-Ray complete • ${result.success}/${result.total} available sources responded.${limited}${cacheNote}`; console.info("X-Ray source report",state.sourceReport);
+   $("status").textContent=`X-Ray complete • ${result.success}/${result.total} sources responded.${limited}${cacheNote}${result.errors?.length?` • ${result.errors.length} source failures recorded in the browser console.`:""}`; console.info("X-Ray source report",state.sourceReport);
    history.replaceState(null,"",`?ticker=${encodeURIComponent(symbol)}`);
  }catch(e){
    $("status").textContent=`Could not analyze ${symbol}: ${e.message||e}. Check the ticker and Finnhub key.`;
