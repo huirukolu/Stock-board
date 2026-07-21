@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#07090c">
 <meta name="description" content="Steve's Stock X-Ray — valuation, fundamentals, news, analyst ratings and an explained research score.">
-<title>Steve's Stock X-Ray 5.8</title>
+<title>Steve's Stock X-Ray 5.9</title>
 <style>
 :root{
   --bg:#07090c;--panel:#11161d;--panel2:#171e27;--text:#f5f7fa;--muted:#9ba8b7;
@@ -82,7 +82,7 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
 </head>
 <body>
 <header>
-  <div class="headerline"><div><h1>Steve's Stock X-Ray 5.8</h1><div class="sub">Fast decisions with a five-second summary, Board context, score history, price zones and explained scoring</div></div><button id="backBtn">Board</button></div>
+  <div class="headerline"><div><h1>Steve's Stock X-Ray 5.9</h1><div class="sub">Fast decisions with a five-second summary, Board context, score history, price zones and explained scoring</div></div><button id="backBtn">Board</button></div>
 </header>
 <main>
   <div class="searchbar">
@@ -557,13 +557,18 @@ async function finnhub(path,key){
 }
 function getBoardCache(symbol){
  let context=null;
+ const merge=v=>{if(v&&typeof v==="object"&&String(v.symbol||symbol).toUpperCase()===symbol)context={...(context||{}),...v,symbol}};
+ try{merge(JSON.parse(localStorage.getItem(`stockBoardContext:${symbol}`)||"null"))}catch(e){}
  for(const key of ["stockBoardContext","boardXrayContext","xrayBoardContext"]){
-  try{const v=JSON.parse(localStorage.getItem(key)||"null");if(v&&String(v.symbol||"").toUpperCase()===symbol){context=v;break}}catch(e){}
+  try{merge(JSON.parse(localStorage.getItem(key)||"null"))}catch(e){}
  }
  try{
+  const full=JSON.parse(localStorage.getItem("steveXrayBoardCacheV2")||"null");
+  merge(full?.stocks?.[symbol]);
+ }catch(e){}
+ try{
   const boardData=JSON.parse(localStorage.getItem("steveDataV5")||"{}");
-  const raw=boardData?.[symbol];
-  if(raw&&typeof raw==="object")context={...(raw||{}),...(context||{}),symbol};
+  merge(boardData?.[symbol]);
  }catch(e){}
  return context;
 }
@@ -582,8 +587,9 @@ function applyBoardFallback(symbol){
  if(!state.profile.name&&b.name)state.profile.name=b.name;
  if(!finite(state.quote.c)&&finite(b.price)){state.quote.c=Number(b.price);state.quote.pc=finite(b.previousClose)?Number(b.previousClose):null;state.boardFallbackUsed=true}
  state.summary=state.summary||{};state.summary.summaryDetail=state.summary.summaryDetail||{};
- if(!finite(raw(state.summary.summaryDetail.fiftyTwoWeekHigh))&&finite(b.yearHigh))state.summary.summaryDetail.fiftyTwoWeekHigh={raw:Number(b.yearHigh)};
- if(!finite(raw(state.summary.summaryDetail.fiftyTwoWeekLow))&&finite(b.yearLow))state.summary.summaryDetail.fiftyTwoWeekLow={raw:Number(b.yearLow)};
+ if(!finite(raw(state.summary.summaryDetail.fiftyTwoWeekHigh))&&finite(b.yearHigh)){state.summary.summaryDetail.fiftyTwoWeekHigh={raw:Number(b.yearHigh)};state.boardFallbackUsed=true}
+ if(!finite(raw(state.summary.summaryDetail.fiftyTwoWeekLow))&&finite(b.yearLow)){state.summary.summaryDetail.fiftyTwoWeekLow={raw:Number(b.yearLow)};state.boardFallbackUsed=true}
+ if(finite(b.ytd)&&!finite(state.metrics.yearToDatePriceReturnDaily)){state.metrics.yearToDatePriceReturnDaily=Number(b.ytd);state.boardFallbackUsed=true}
 }
 async function loadAll(symbol){
  const key=$("apiKey").value.trim();
@@ -614,8 +620,8 @@ async function loadAll(symbol){
  }
  applyBoardFallback(symbol);
  state.name=state.profile.name||textPick("summary.price.longName","summary.price.shortName")||state.boardData?.name||symbol;
- const success=r.filter(x=>x.status==="fulfilled").length+(state.boardFallbackUsed?1:0);
- return {success,total:r.length+(state.boardFallbackUsed?1:0),boardFallback:state.boardFallbackUsed,errors:r.filter(x=>x.status==="rejected").map(x=>String(x.reason?.message||x.reason))};
+ const success=r.filter(x=>x.status==="fulfilled").length;
+ return {success,total:r.length,boardFallback:state.boardFallbackUsed,errors:r.filter(x=>x.status==="rejected").map(x=>String(x.reason?.message||x.reason))};
 }
 function compute(){
  const q=state.quote,m=state.metrics,s=state.summary;
@@ -675,19 +681,32 @@ function compute(){
  ]);
  const bq=finite(state.boardData?.quality)?Number(state.boardData.quality):null;
  const bv=finite(state.boardData?.value)?Number(state.boardData.value):null;
+ const boardMomentum=average([
+   finite(state.boardData?.ytd)?scoreLinear(Number(state.boardData.ytd),-25,30):null,
+   finite(state.boardData?.belowHigh)?(Math.abs(Number(state.boardData.belowHigh))>=8&&Math.abs(Number(state.boardData.belowHigh))<=25?85:Math.abs(Number(state.boardData.belowHigh))<8?60:Math.abs(Number(state.boardData.belowHigh))<=40?55:25):null,
+   finite(state.boardData?.range)?scoreLinear(Number(state.boardData.range),15,85):null
+ ]);
+ const boardRisk=average([
+   finite(state.boardData?.range)?(Number(state.boardData.range)<18?35:Number(state.boardData.range)>94?55:75):null,
+   finite(state.boardData?.belowHigh)&&Number(state.boardData.belowHigh)<-40?30:75
+ ]);
  const scores={
   valuation:finite(valuation)?valuation:bv,
   growth,
   profitability:finite(profitability)?profitability:bq,
   balance:finite(balance)?balance:(finite(bq)?clamp(bq-5):null),
   cashflow:finite(cashflow)?cashflow:(finite(bq)?clamp(bq-3):null),
-  analyst,momentum,dividend,risk
+  analyst,
+  momentum:finite(momentum)?momentum:boardMomentum,
+  dividend,
+  risk:finite(risk)?risk:boardRisk
  };
  const weights={valuation:.18,growth:.14,profitability:.15,balance:.14,cashflow:.10,analyst:.09,momentum:.09,dividend:.07,risk:.04};
  let weighted=0,w=0;for(const [k,v] of Object.entries(scores))if(finite(v)){weighted+=v*weights[k];w+=weights[k]}
  let overall=w?weighted/w:null;
  const available=Object.values(scores).filter(finite).length;
- const dataConfidence=clamp(available/9*78 + (state.news.length?8:0) + (state.recommendations.length?7:0) + (state.profile.name?7:0) - (state.boardFallbackUsed?8:0));
+ const boardCoverage=state.boardData?["price","yearHigh","yearLow","quality","value","score","ytd"].filter(k=>finite(state.boardData?.[k])).length:0;
+ const dataConfidence=clamp(available/9*78 + (state.news.length?8:0) + (state.recommendations.length?7:0) + (state.profile.name?7:0) + Math.min(10,boardCoverage*1.4));
  if(finite(overall)){
    if(finite(pe)&&pe>70)overall-=6;
    if(finite(debtEquity)&&debtEquity>200)overall-=6;
@@ -947,9 +966,9 @@ function boardContextData(){
    try{const x=JSON.parse(localStorage.getItem(key)||"null");if(x&&String(x.symbol||"").toUpperCase()===state.symbol){saved=x;break}}catch(e){}
  }
  return{
-   rank:Number.isFinite(rank)&&rank>0?rank:(saved&&finite(saved.rank)?Number(saved.rank):null),
-   total:Number.isFinite(total)&&total>0?total:(saved&&finite(saved.total)?Number(saved.total):null),
-   score:Number.isFinite(score)&&score>0?score:(saved&&finite(saved.score)&&Number(saved.score)>0?Number(saved.score):null)
+   rank:Number.isFinite(rank)&&rank>0?rank:(saved&&finite(saved.rank)?Number(saved.rank):(finite(state.boardData?.rank)?Number(state.boardData.rank):null)),
+   total:Number.isFinite(total)&&total>0?total:(saved&&finite(saved.total)?Number(saved.total):(finite(state.boardData?.total)?Number(state.boardData.total):null)),
+   score:Number.isFinite(score)&&score>0?score:(saved&&finite(saved.score)&&Number(saved.score)>0?Number(saved.score):(finite(state.boardData?.score)&&Number(state.boardData.score)>0?Number(state.boardData.score):null))
  };
 }
 function renderBoardContext(){
