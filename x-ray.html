@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#07090c">
 <meta name="description" content="Steve's Stock X-Ray — valuation, fundamentals, news, analyst ratings and an explained research score.">
-<title>Steve's Stock X-Ray 5.9</title>
+<title>Steve's Stock X-Ray 6.0</title>
 <style>
 :root{
   --bg:#07090c;--panel:#11161d;--panel2:#171e27;--text:#f5f7fa;--muted:#9ba8b7;
@@ -82,7 +82,7 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
 </head>
 <body>
 <header>
-  <div class="headerline"><div><h1>Steve's Stock X-Ray 5.9</h1><div class="sub">Fast decisions with a five-second summary, Board context, score history, price zones and explained scoring</div></div><button id="backBtn">Board</button></div>
+  <div class="headerline"><div><h1>Steve's Stock X-Ray 6.0</h1><div class="sub">Fast decisions with a five-second summary, Board context, score history, price zones and explained scoring</div></div><button id="backBtn">Board</button></div>
 </header>
 <main>
   <div class="searchbar">
@@ -558,6 +558,13 @@ async function finnhub(path,key){
 function getBoardCache(symbol){
  let context=null;
  const merge=v=>{if(v&&typeof v==="object"&&String(v.symbol||symbol).toUpperCase()===symbol)context={...(context||{}),...v,symbol}};
+ try{
+  const q=new URLSearchParams(location.search),v={symbol};
+  for(const k of ["name","rank","total","score","quality","value","price","previousClose","yearHigh","yearLow","belowHigh","aboveLow","ytd","range"]){
+   const x=q.get(k);if(x!==null)v[k]=k==="name"?x:Number(x);
+  }
+  if(Object.keys(v).length>1)merge(v);
+ }catch(e){}
  try{merge(JSON.parse(localStorage.getItem(`stockBoardContext:${symbol}`)||"null"))}catch(e){}
  for(const key of ["stockBoardContext","boardXrayContext","xrayBoardContext"]){
   try{merge(JSON.parse(localStorage.getItem(key)||"null"))}catch(e){}
@@ -582,6 +589,20 @@ function yahooChartFallback(symbol){
   return{price,previousClose:first(meta.chartPreviousClose,meta.previousClose,closes.length>1?closes.at(-2):null),high52:highs.length?Math.max(...highs):null,low52:lows.length?Math.min(...lows):null};
  });
 }
+async function yahooQuoteFallback(symbol){
+ const path=`/v7/finance/quote?symbols=${encodeURIComponent(symbol)}`;
+ const j=await tryUrls(yahooUrls(path));
+ const x=j?.quoteResponse?.result?.[0];if(!x)throw Error("Yahoo quote unavailable");
+ return x;
+}
+function mergeDeep(target,source){
+ if(!source||typeof source!=="object")return target;
+ for(const [k,v] of Object.entries(source)){
+  if(v&&typeof v==="object"&&!Array.isArray(v))target[k]=mergeDeep(target[k]&&typeof target[k]==="object"?target[k]:{},v);
+  else if(v!==undefined&&v!==null)target[k]=v;
+ }
+ return target;
+}
 function applyBoardFallback(symbol){
  const b=getBoardCache(symbol);state.boardData=b;state.boardFallbackUsed=false;if(!b)return;
  if(!state.profile.name&&b.name)state.profile.name=b.name;
@@ -594,34 +615,57 @@ function applyBoardFallback(symbol){
 async function loadAll(symbol){
  const key=$("apiKey").value.trim();
  const to=Math.floor(Date.now()/1000),from=to-45*86400;
- const yahooPath=`/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=price,summaryDetail,defaultKeyStatistics,financialData,calendarEvents,recommendationTrend,earningsTrend,incomeStatementHistoryQuarterly,balanceSheetHistoryQuarterly,cashflowStatementHistoryQuarterly`;
- const jobs=[
-  finnhub(`quote?symbol=${encodeURIComponent(symbol)}`,key),
-  finnhub(`stock/profile2?symbol=${encodeURIComponent(symbol)}`,key),
-  finnhub(`stock/metric?symbol=${encodeURIComponent(symbol)}&metric=all`,key),
-  finnhub(`stock/recommendation?symbol=${encodeURIComponent(symbol)}`,key),
-  finnhub(`company-news?symbol=${encodeURIComponent(symbol)}&from=${new Date(from*1000).toISOString().slice(0,10)}&to=${new Date(to*1000).toISOString().slice(0,10)}`,key),
-  tryUrls(yahooUrls(yahooPath)),
-  yahooChartFallback(symbol)
+ const jobs=[],names=[];
+ const add=(name,promise)=>{names.push(name);jobs.push(promise)};
+ if(key){
+  add("Finnhub quote",finnhub(`quote?symbol=${encodeURIComponent(symbol)}`,key));
+  add("Finnhub profile",finnhub(`stock/profile2?symbol=${encodeURIComponent(symbol)}`,key));
+  add("Finnhub metrics",finnhub(`stock/metric?symbol=${encodeURIComponent(symbol)}&metric=all`,key));
+  add("Finnhub analysts",finnhub(`stock/recommendation?symbol=${encodeURIComponent(symbol)}`,key));
+  add("Finnhub news",finnhub(`company-news?symbol=${encodeURIComponent(symbol)}&from=${new Date(from*1000).toISOString().slice(0,10)}&to=${new Date(to*1000).toISOString().slice(0,10)}`,key));
+ }
+ add("Yahoo quote",yahooQuoteFallback(symbol));
+ add("Yahoo chart",yahooChartFallback(symbol));
+ const groups=[
+  ["Yahoo valuation","price,summaryDetail,defaultKeyStatistics"],
+  ["Yahoo fundamentals","financialData"],
+  ["Yahoo trends","calendarEvents,recommendationTrend,earningsTrend"]
  ];
+ for(const [name,modules] of groups){
+  const path=`/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=${modules}`;
+  add(name,tryUrls(yahooUrls(path)));
+ }
  const r=await Promise.allSettled(jobs);
- state.quote=r[0].status==="fulfilled"?r[0].value:{};
- state.profile=r[1].status==="fulfilled"?r[1].value:{};
- state.metrics=r[2].status==="fulfilled"?(r[2].value?.metric||{}):{};
- state.recommendations=r[3].status==="fulfilled"&&Array.isArray(r[3].value)?r[3].value:[];
- state.news=r[4].status==="fulfilled"&&Array.isArray(r[4].value)?r[4].value.slice(0,12):[];
- state.summary=r[5].status==="fulfilled"?(r[5].value?.quoteSummary?.result?.[0]||{}):{};
- if(r[6].status==="fulfilled"){
-  const c=r[6].value||{};
-  if(!finite(state.quote.c)&&finite(c.price)){state.quote.c=c.price;state.quote.pc=c.previousClose}
-  state.summary.summaryDetail=state.summary.summaryDetail||{};
-  if(!finite(raw(state.summary.summaryDetail.fiftyTwoWeekHigh))&&finite(c.high52))state.summary.summaryDetail.fiftyTwoWeekHigh={raw:c.high52};
-  if(!finite(raw(state.summary.summaryDetail.fiftyTwoWeekLow))&&finite(c.low52))state.summary.summaryDetail.fiftyTwoWeekLow={raw:c.low52};
+ state.quote={};state.profile={};state.metrics={};state.recommendations=[];state.news=[];state.summary={};
+ for(let i=0;i<r.length;i++){
+  if(r[i].status!=="fulfilled")continue;
+  const name=names[i],v=r[i].value;
+  if(name==="Finnhub quote")state.quote=v||{};
+  else if(name==="Finnhub profile")state.profile=v||{};
+  else if(name==="Finnhub metrics")state.metrics=v?.metric||{};
+  else if(name==="Finnhub analysts")state.recommendations=Array.isArray(v)?v:[];
+  else if(name==="Finnhub news")state.news=Array.isArray(v)?v.slice(0,12):[];
+  else if(name==="Yahoo quote"){
+   if(!finite(state.quote.c)&&finite(v.regularMarketPrice)){state.quote.c=v.regularMarketPrice;state.quote.pc=v.regularMarketPreviousClose}
+   if(!state.profile.name)state.profile.name=v.longName||v.shortName||"";
+   state.summary.price=mergeDeep(state.summary.price||{}, {longName:v.longName,shortName:v.shortName,regularMarketPrice:{raw:v.regularMarketPrice},marketCap:{raw:v.marketCap}});
+   state.summary.summaryDetail=mergeDeep(state.summary.summaryDetail||{}, {fiftyTwoWeekHigh:{raw:v.fiftyTwoWeekHigh},fiftyTwoWeekLow:{raw:v.fiftyTwoWeekLow},trailingPE:{raw:v.trailingPE},forwardPE:{raw:v.forwardPE},dividendYield:{raw:v.dividendYield}});
+   state.summary.defaultKeyStatistics=mergeDeep(state.summary.defaultKeyStatistics||{}, {priceToBook:{raw:v.priceToBook},pegRatio:{raw:v.pegRatio},beta:{raw:v.beta},trailingEps:{raw:v.epsTrailingTwelveMonths},forwardPE:{raw:v.forwardPE}});
+  }else if(name==="Yahoo chart"){
+   const c=v||{};if(!finite(state.quote.c)&&finite(c.price)){state.quote.c=c.price;state.quote.pc=c.previousClose}
+   state.summary.summaryDetail=state.summary.summaryDetail||{};
+   if(!finite(raw(state.summary.summaryDetail.fiftyTwoWeekHigh))&&finite(c.high52))state.summary.summaryDetail.fiftyTwoWeekHigh={raw:c.high52};
+   if(!finite(raw(state.summary.summaryDetail.fiftyTwoWeekLow))&&finite(c.low52))state.summary.summaryDetail.fiftyTwoWeekLow={raw:c.low52};
+  }else if(name.startsWith("Yahoo ")){
+   const part=v?.quoteSummary?.result?.[0]||{};mergeDeep(state.summary,part);
+  }
  }
  applyBoardFallback(symbol);
  state.name=state.profile.name||textPick("summary.price.longName","summary.price.shortName")||state.boardData?.name||symbol;
- const success=r.filter(x=>x.status==="fulfilled").length;
- return {success,total:r.length,boardFallback:state.boardFallbackUsed,errors:r.filter(x=>x.status==="rejected").map(x=>String(x.reason?.message||x.reason))};
+ const successes=r.map((x,i)=>x.status==="fulfilled"?names[i]:null).filter(Boolean);
+ const failures=r.map((x,i)=>x.status==="rejected"?`${names[i]}: ${String(x.reason?.message||x.reason)}`:null).filter(Boolean);
+ state.sourceReport={successes,failures};
+ return {success:successes.length,total:r.length,boardFallback:state.boardFallbackUsed,errors:failures};
 }
 function compute(){
  const q=state.quote,m=state.metrics,s=state.summary;
@@ -1267,7 +1311,7 @@ async function analyze(){
    compute();render();
    const limited=result.success<3?" Some free-data sections were unavailable.":"";
    const cacheNote=result.boardFallback?" Board cache was used as a fallback.":"";
-   $("status").textContent=`X-Ray complete • ${result.success}/${result.total} data sources responded.${limited}${cacheNote}`;
+   $("status").textContent=`X-Ray complete • ${result.success}/${result.total} available sources responded.${limited}${cacheNote}`; console.info("X-Ray source report",state.sourceReport);
    history.replaceState(null,"",`?ticker=${encodeURIComponent(symbol)}`);
  }catch(e){
    $("status").textContent=`Could not analyze ${symbol}: ${e.message||e}. Check the ticker and Finnhub key.`;
