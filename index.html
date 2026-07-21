@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#07090c">
 <meta name="description" content="Steve's Stock Board — live quotes, ranked opportunities, charts, alerts, and watchlist backup.">
-<title>Steve's Stock Board 5.3</title>
+<title>Steve's Stock Board 5.4</title>
 <style>
 :root{--bg:#07090c;--panel:#11161d;--panel2:#171e27;--text:#f5f7fa;--muted:#9ba8b7;--line:#29323e;--green:#21d765;--red:#ff6257;--blue:#67adff;--gold:#ffd166}
 *{box-sizing:border-box}
@@ -41,7 +41,7 @@ button{font-weight:750;cursor:pointer;min-height:44px}.primary{background:#173b6
 .charttabs button{width:auto;padding:6px 8px;font-size:11px}.charttabs button.active{border-color:var(--blue);background:#142a43}.chartwrap{height:180px}.chartwrap canvas{width:100%;height:100%;display:block}.chartnote{font-size:11px;color:var(--muted);margin-top:5px}
 .tools{display:flex;gap:8px;flex-wrap:wrap;margin:13px 0}.tools input{flex:1;min-width:170px}.tools button{width:auto}
 details{margin-top:16px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:13px}summary{font-weight:850;cursor:pointer}
-.settings{display:grid;gap:9px;margin-top:12px}.note{color:var(--muted);font-size:12px;line-height:1.45}.empty{text-align:center;color:var(--muted);padding:28px}.soundrow{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}.soundrow input{width:auto}.toast{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:12px 16px;color:var(--text);font-size:14px;box-shadow:0 8px 24px rgba(0,0,0,.5);transition:opacity .3s,transform .3s;animation:slideIn .25s ease}@keyframes slideIn{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:translateX(0)}}
+.settings{display:grid;gap:9px;margin-top:12px}.diagGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:7px;margin-top:10px}.diagItem{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:9px}.diagItem b{display:block;margin-top:4px;font-size:14px}.diagErrors{margin-top:9px;font-size:12px;line-height:1.45;color:var(--muted)}.note{color:var(--muted);font-size:12px;line-height:1.45}.empty{text-align:center;color:var(--muted);padding:28px}.soundrow{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}.soundrow input{width:auto}.toast{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:12px 16px;color:var(--text);font-size:14px;box-shadow:0 8px 24px rgba(0,0,0,.5);transition:opacity .3s,transform .3s;animation:slideIn .25s ease}@keyframes slideIn{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:translateX(0)}}
 
 .portfolioHero{display:grid;gap:10px;margin:4px 0 12px}.portfolioTotals{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.portfolioBox{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:12px}.portfolioBox .big{font-size:22px;font-weight:900;margin-top:5px}.portfolioActions{display:flex;gap:8px;flex-wrap:wrap}.portfolioActions button{width:auto}.portfolioList{display:grid;gap:9px}.holding{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:13px}.holdingTop{display:grid;grid-template-columns:1fr auto;gap:10px}.holdingGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:7px;margin-top:10px}.holdingAction{margin-top:10px;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:#101821;font-size:12px;line-height:1.4}.portfolioEmpty{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:24px;text-align:center;color:var(--muted)}
 @media(min-width:760px){.portfolioTotals{grid-template-columns:repeat(4,1fr)}.portfolioList{grid-template-columns:1fr 1fr}.holdingGrid{grid-template-columns:repeat(4,1fr)}}
@@ -50,7 +50,7 @@ details{margin-top:16px;background:var(--panel);border:1px solid var(--line);bor
 </head>
 <body>
 <header>
-<div class="headerline"><h1>Steve's Stock Board 5.2</h1><span id="marketBadge" class="marketbadge">Checking market…</span></div>
+<div class="headerline"><h1>Steve's Stock Board 5.4</h1><span id="marketBadge" class="marketbadge">Checking market…</span></div>
 <div class="sub">Live quotes • ranked opportunities • Portfolio Center • tap any ticker for Stock X-Ray • charts • visual alerts</div>
 </header>
 <main>
@@ -96,6 +96,15 @@ details{margin-top:16px;background:var(--panel);border:1px solid var(--line);bor
 <button id="saveKey">Save key on this device</button>
 <label class="soundrow"><input type="checkbox" id="soundAlerts"> Play sound when a price alert triggers</label>
 <div class="note">Finnhub supplies live regular-session quotes. Yahoo supplies charts, 2026 history, and premarket/after-hours data when available. The opportunity ranking combines a built-in company quality/valuation rating with price trend, pullback, yearly range position, average price, and recovery signals. It is a research priority score—not a buy recommendation. Alerts are visual only and appear while this page is open. Verify any trade price in Fidelity or Robinhood.</div>
+</div>
+</details>
+<details>
+<summary>Data-feed diagnostics</summary>
+<div class="settings">
+  <div id="diagSummary" class="note">No refresh diagnostics recorded yet.</div>
+  <div id="diagGrid" class="diagGrid"></div>
+  <div id="diagErrors" class="diagErrors"></div>
+  <button id="clearDiagnostics">Clear diagnostics</button>
 </div>
 </details>
 </main>
@@ -161,12 +170,49 @@ const MIN_REFRESH_GAP_MS=45000;
 if(!openCharts||typeof openCharts!=="object"||Array.isArray(openCharts))openCharts={};
 const alertedState={};
 const AUTO_REFRESH_MS=5*60*1000;
+let diagnostics=safeStoredJSON("steveFeedDiagnosticsV1",null)||{
+ updatedAt:null,processed:0,loaded:0,unavailable:0,
+ finnhub:{ok:0,fail:0},yahooExtended:{ok:0,fail:0},yahooHistory:{ok:0,fail:0},
+ errors:[]
+};
+function resetDiagnostics(){
+ diagnostics={updatedAt:Date.now(),processed:0,loaded:0,unavailable:0,
+  finnhub:{ok:0,fail:0},yahooExtended:{ok:0,fail:0},yahooHistory:{ok:0,fail:0},errors:[]};
+}
+function recordDiagnostic(source,symbol,error){
+ if(!diagnostics[source])diagnostics[source]={ok:0,fail:0};
+ diagnostics[source].fail++;
+ const msg=String(error?.message||error||"Unknown error");
+ diagnostics.errors.push({source,symbol,message:msg,at:Date.now()});
+ diagnostics.errors=diagnostics.errors.slice(-20);
+}
+function diagnosticSuccess(source){
+ if(!diagnostics[source])diagnostics[source]={ok:0,fail:0};
+ diagnostics[source].ok++;
+}
+function renderDiagnostics(){
+ const s=$("diagSummary"),g=$("diagGrid"),e=$("diagErrors");
+ if(!s||!g||!e)return;
+ s.textContent=diagnostics.updatedAt
+  ?`Last refresh ${new Date(diagnostics.updatedAt).toLocaleString()} • ${diagnostics.loaded}/${diagnostics.processed} loaded • ${diagnostics.unavailable} unavailable`
+  :"No refresh diagnostics recorded yet.";
+ const items=[
+  ["Finnhub quotes",diagnostics.finnhub],
+  ["Yahoo daily/extended",diagnostics.yahooExtended],
+  ["Yahoo history",diagnostics.yahooHistory]
+ ];
+ g.innerHTML=items.map(([label,v])=>`<div class="diagItem"><span class="name">${label}</span><b>${v?.ok||0} succeeded • ${v?.fail||0} failed</b></div>`).join("");
+ e.innerHTML=diagnostics.errors.length
+  ?`<b>Most recent failures</b><br>${diagnostics.errors.slice(-8).reverse().map(x=>`${new Date(x.at).toLocaleTimeString()} • ${x.symbol} • ${x.source}: ${x.message}`).join("<br>")}`
+  :"No feed failures recorded in the latest refresh.";
+}
+
 $("apiKey").value=localStorage.getItem("finnhubKey")||"";
 $("soundAlerts").checked=localStorage.getItem("soundAlerts")==="true";
 $("soundAlerts").addEventListener("change",function(){localStorage.setItem("soundAlerts",String(this.checked));showToast(this.checked?"Alert sounds enabled":"Alert sounds disabled","info")});
 function showToast(message,type="info",duration=4000){const c=$("toastContainer");if(!c)return;const t=document.createElement("div");t.className="toast";t.style.pointerEvents="auto";t.style.borderColor=({success:"var(--green)",warning:"var(--gold)",error:"var(--red)",info:"var(--blue)"}[type]||"var(--line)");t.textContent=message;c.appendChild(t);setTimeout(()=>{t.style.opacity="0";t.style.transform="translateX(18px)";setTimeout(()=>t.remove(),320)},duration)}
 function playAlertSound(){if(localStorage.getItem("soundAlerts")!=="true")return;try{const C=window.AudioContext||window.webkitAudioContext;if(!C)return;const ctx=new C(),osc=ctx.createOscillator(),gain=ctx.createGain();osc.connect(gain);gain.connect(ctx.destination);osc.frequency.value=800;gain.gain.value=.22;osc.start();setTimeout(()=>{osc.frequency.value=1200;setTimeout(()=>{gain.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+.25);osc.stop(ctx.currentTime+.25);setTimeout(()=>ctx.close?.(),400)},140)},140)}catch(e){}}
-function save(){localStorage.setItem("steveWatchV3",JSON.stringify(watch));localStorage.setItem("steveDataV5",JSON.stringify(data));localStorage.setItem("steveAlertsV2",JSON.stringify(alerts));localStorage.setItem("steveOpenCharts",JSON.stringify(openCharts));localStorage.setItem("steveHoldingsV1",JSON.stringify(holdings))}
+function save(){localStorage.setItem("steveWatchV3",JSON.stringify(watch));localStorage.setItem("steveDataV5",JSON.stringify(data));localStorage.setItem("steveAlertsV2",JSON.stringify(alerts));localStorage.setItem("steveOpenCharts",JSON.stringify(openCharts));localStorage.setItem("steveHoldingsV1",JSON.stringify(holdings));localStorage.setItem("steveFeedDiagnosticsV1",JSON.stringify(diagnostics))}
 function num(v,d=2){return Number.isFinite(v)?v.toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d}):"—"}
 function pct(v){return Number.isFinite(v)?`${v>=0?"+":""}${num(v)}%`:"—"}
 function cls(v){return v>0?"pos":v<0?"neg":"flat"}
@@ -186,15 +232,45 @@ function updateMarketBadge(){const m=marketSession(),b=$("marketBadge");b.textCo
 function yahooSymbol(s){return s}
 function yahooUrls(path){const a=`https://query1.finance.yahoo.com${path}`,b=`https://query2.finance.yahoo.com${path}`;return[a,b,`https://corsproxy.io/?url=${encodeURIComponent(a)}`,`https://api.allorigins.win/raw?url=${encodeURIComponent(a)}`]}
 async function fetchJson(urls){
- let last;for(const url of urls){try{const c=new AbortController(),t=setTimeout(()=>c.abort(),15000);const r=await fetch(url,{signal:c.signal,cache:"no-store"});clearTimeout(t);if(!r.ok)throw Error(`HTTP ${r.status}`);return await r.json()}catch(e){last=e}}
+ let last;
+ for(const url of urls){
+  for(let attempt=0;attempt<2;attempt++){
+   try{
+    const c=new AbortController(),t=setTimeout(()=>c.abort(),15000);
+    const r=await fetch(url,{signal:c.signal,cache:"no-store"});
+    clearTimeout(t);
+    if(!r.ok)throw Error(`HTTP ${r.status}`);
+    const j=await r.json();
+    if(!j||typeof j!=="object")throw Error("Invalid JSON response");
+    return j;
+   }catch(e){
+    last=e;
+    if(attempt===0)await sleep(700);
+   }
+  }
+ }
  throw last||Error("data unavailable");
 }
 async function getQuote(symbol,key){
  if(Date.now()<finnhubCooldownUntil)throw Error("Finnhub cooldown active");
- const r=await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${encodeURIComponent(key)}`,{cache:"no-store"});
- if(r.status===429){finnhubCooldownUntil=Date.now()+60*1000;throw Error("Finnhub rate limited — cooling down for 60 seconds");}
- if(!r.ok)throw Error(`Finnhub HTTP ${r.status}`);const q=await r.json();if(!q||!Number.isFinite(q.c)||q.c<=0)throw Error("No live quote");
- return{price:q.c,dayDollar:q.d,dayPct:q.dp,dayHigh:q.h,dayLow:q.l,prev:q.pc,quoteAt:Date.now(),priceSource:"Finnhub live"};
+ let last;
+ for(let attempt=0;attempt<2;attempt++){
+  try{
+   const c=new AbortController(),t=setTimeout(()=>c.abort(),14000);
+   const r=await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${encodeURIComponent(key)}`,{signal:c.signal,cache:"no-store"});
+   clearTimeout(t);
+   if(r.status===429){finnhubCooldownUntil=Date.now()+60*1000;throw Error("Finnhub rate limited — cooling down for 60 seconds");}
+   if(!r.ok)throw Error(`Finnhub HTTP ${r.status}`);
+   const q=await r.json();
+   if(!q||!Number.isFinite(q.c)||q.c<=0)throw Error("No live quote");
+   return{price:q.c,dayDollar:q.d,dayPct:q.dp,dayHigh:q.h,dayLow:q.l,prev:q.pc,quoteAt:Date.now(),priceSource:"Finnhub live"};
+  }catch(e){
+   last=e;
+   if(String(e?.message||e).includes("rate limited")||String(e?.message||e).includes("cooldown"))throw e;
+   if(attempt===0)await sleep(800);
+  }
+ }
+ throw last||Error("No live quote");
 }
 async function getYear(symbol){
  const y=yahooSymbol(symbol),path=`/v8/finance/chart/${encodeURIComponent(y)}?period1=${yearStartUnix()}&period2=${unix(new Date())}&interval=1d&events=history`;
@@ -486,7 +562,7 @@ async function refresh(options={}){
   $("status").textContent="Board data is still fresh — refresh skipped to protect the free feeds.";
   return;
  }
- refreshing=true;stopped=false;lastRefreshStartedAt=Date.now();$("refresh").disabled=true;
+ refreshing=true;stopped=false;lastRefreshStartedAt=Date.now();$("refresh").disabled=true;resetDiagnostics();renderDiagnostics();
  const key=$("apiKey").value.trim();let ok=0,fail=0,quoteOk=0,quoteFail=0,rateLimited=false;
  try{
   for(let i=0;i<watch.length;i++){
@@ -495,17 +571,17 @@ async function refresh(options={}){
    $("status").textContent=`Loading ${i+1} of ${watch.length}: ${s} • batches of ${BOARD_BATCH_SIZE}`;
    let loaded=Number.isFinite(merged.price)||Number.isFinite(merged.historyPrice);
    if(key&&!stopped){
-    try{Object.assign(merged,await getQuote(s,key));quoteOk++;loaded=true}
-    catch(e){quoteFail++;if(String(e.message||e).includes("rate limited")||String(e.message||e).includes("cooldown"))rateLimited=true}
+    try{Object.assign(merged,await getQuote(s,key));quoteOk++;diagnosticSuccess("finnhub");loaded=true}
+    catch(e){quoteFail++;recordDiagnostic("finnhub",s,e);if(String(e.message||e).includes("rate limited")||String(e.message||e).includes("cooldown"))rateLimited=true}
    }
    if(stopped)break;
    const needDaily=force||!Number.isFinite(merged.dayPct)||!old.extendedAt||Date.now()-old.extendedAt>10*60*1000;
-   if(needDaily){try{Object.assign(merged,await getExtended(s));if(Number.isFinite(merged.price))loaded=true}catch(e){}}
+   if(needDaily){try{Object.assign(merged,await getExtended(s));diagnosticSuccess("yahooExtended");if(Number.isFinite(merged.price))loaded=true}catch(e){recordDiagnostic("yahooExtended",s,e)}}
    if(stopped)break;
    const needYear=force||!old.yearAt||Date.now()-old.yearAt>24*60*60*1000;
-   if(needYear){try{Object.assign(merged,await getYear(s));if(!loaded&&Number.isFinite(merged.historyPrice)){merged.price=merged.historyPrice;loaded=true}}catch(e){}}
+   if(needYear){try{Object.assign(merged,await getYear(s));diagnosticSuccess("yahooHistory");if(!loaded&&Number.isFinite(merged.historyPrice)){merged.price=merged.historyPrice;loaded=true}}catch(e){recordDiagnostic("yahooHistory",s,e)}}
    else if(!loaded&&Number.isFinite(merged.historyPrice)){merged.price=merged.historyPrice;loaded=true}
-   data[s]=merged;loaded?ok++:fail++;save();render();
+   data[s]=merged;loaded?ok++:fail++;diagnostics.processed=i+1;diagnostics.loaded=ok;diagnostics.unavailable=fail;diagnostics.updatedAt=Date.now();save();render();renderDiagnostics();
    if(stopped)break;
    const endOfBatch=(i+1)%BOARD_BATCH_SIZE===0 && i<watch.length-1;
    if(endOfBatch){
@@ -518,7 +594,7 @@ async function refresh(options={}){
   $("status").textContent=stopped
    ?`Board loading paused for X-Ray • ${ok}/${watch.length} processed`
    :`Last updated ${new Date().toLocaleTimeString()} • ${ok}/${watch.length} loaded • ${fail} unavailable${key?` • Finnhub live: ${quoteOk}${quoteFail?` • quote failures: ${quoteFail}`:""}`:" • Add a Finnhub key for live quotes"}${rateLimited?" • Finnhub cooldown active":""} • Auto-refresh: 5 min`;
- }finally{$("refresh").disabled=false;refreshing=false;updateMarketBadge()}
+ }finally{diagnostics.updatedAt=Date.now();diagnostics.processed=Math.max(diagnostics.processed,ok+fail);diagnostics.loaded=ok;diagnostics.unavailable=fail;save();renderDiagnostics();$("refresh").disabled=false;refreshing=false;updateMarketBadge()}
 }
 
 window.setAlert=s=>{const a=alerts[s]||{},lowInput=prompt(`${s}: highlight at or below this price. Blank clears it.`,Number.isFinite(a.below)?a.below:"");if(lowInput===null)return;const highInput=prompt(`${s}: highlight at or above this price. Blank clears it.`,Number.isFinite(a.above)?a.above:"");if(highInput===null)return;const b=lowInput.trim()===""?null:Number(lowInput),h=highInput.trim()===""?null:Number(highInput);if((b!==null&&(!Number.isFinite(b)||b<=0))||(h!==null&&(!Number.isFinite(h)||h<=0))){alert("Alert prices must be positive numbers.");return}if(b!==null&&h!==null&&b>=h){alert("The lower alert must be below the upper alert.");return}alerts[s]={};if(b!==null)alerts[s].below=b;if(h!==null)alerts[s].above=h;if(!Object.keys(alerts[s]).length)delete alerts[s];alertedState[s]=false;save();render();showToast(Object.prototype.hasOwnProperty.call(alerts,s)?`${s} alert saved`:`${s} alert cleared`,"success")}
@@ -572,6 +648,7 @@ document.addEventListener("click",e=>{
 $("refresh").onclick=()=>refresh({force:true});$("stop").onclick=()=>stopped=true;let searchTimer;$("search").oninput=()=>{clearTimeout(searchTimer);searchTimer=setTimeout(render,180)};$("sort").onchange=render;
 document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{document.querySelectorAll(".tabs button").forEach(x=>x.classList.remove("active"));b.classList.add("active");view=b.dataset.view;if(view==="opportunities")$("sort").value="opportunity";if(view==="gainers")$("sort").value="dayDesc";if(view==="losers")$("sort").value="dayAsc";if(view==="dips"||view==="nearHigh")$("sort").value="dipDesc";if(view==="belowAvg")$("sort").value="belowAvg";render()});
 $("saveKey").onclick=()=>{localStorage.setItem("finnhubKey",$("apiKey").value.trim());$("status").textContent="Finnhub key saved on this device."}
+$("clearDiagnostics").onclick=()=>{resetDiagnostics();save();renderDiagnostics();showToast("Feed diagnostics cleared","info")}
 $("add").onclick=()=>{const s=$("newTicker").value.trim().toUpperCase().replace(/\s/g,"");if(s&&!watch.some(x=>x.symbol===s)){watch.push({symbol:s,name:s});save();render()}$("newTicker").value=""}
 $("addHolding").onclick=()=>{const s=prompt("Ticker symbol to add to Portfolio Center","");if(s===null)return;const symbol=s.trim().toUpperCase();if(!symbol)return;if(!watch.some(x=>x.symbol===symbol)){watch.push({symbol,name:symbol});save()}editHolding(symbol)};
 $("clearPortfolio").onclick=()=>{if(confirm("Clear all Portfolio Center holdings?")){holdings={};save();render();showToast("Portfolio Center cleared","info")}};
@@ -657,6 +734,7 @@ function bootBoard(){
   updateMarketBadge();
   setInterval(updateMarketBadge,60000);
   render();
+  renderDiagnostics();
   restoreOpenCharts().catch(e=>console.warn("Open-chart restore skipped",e));
   startAuto();
   $("status").textContent=`Starting refresh for ${watch.length} stocks…`;
