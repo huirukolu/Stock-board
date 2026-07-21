@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#07090c">
 <meta name="description" content="Steve's Stock X-Ray — valuation, fundamentals, news, analyst ratings and an explained research score.">
-<title>Steve's Stock X-Ray 5.6</title>
+<title>Steve's Stock X-Ray 5.7</title>
 <style>
 :root{
   --bg:#07090c;--panel:#11161d;--panel2:#171e27;--text:#f5f7fa;--muted:#9ba8b7;
@@ -82,7 +82,7 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
 </head>
 <body>
 <header>
-  <div class="headerline"><div><h1>Steve's Stock X-Ray 5.6</h1><div class="sub">Fast decisions with a five-second summary, Board context, score history, price zones and explained scoring</div></div><button id="backBtn">Board</button></div>
+  <div class="headerline"><div><h1>Steve's Stock X-Ray 5.7</h1><div class="sub">Fast decisions with a five-second summary, Board context, score history, price zones and explained scoring</div></div><button id="backBtn">Board</button></div>
 </header>
 <main>
   <div class="searchbar">
@@ -285,8 +285,8 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
   </div>
 
   <details>
-    <summary>What’s new in Version 5.6 <span class="releaseBadge">NEW</span></summary>
-    <div class="note" style="margin-top:10px">Five-second Quick Decision card • clearer Board handoff • prior-score history • decision cockpit • quality/value/opportunity separation • transparent point-by-point score math.</div>
+    <summary>What’s new in Version 5.7 <span class="releaseBadge">NEW</span></summary>
+    <div class="note" style="margin-top:10px">Confidence gate prevents Buy/Hold/Avoid calls when data is incomplete • Opportunity becomes unavailable when its core inputs are missing • price zones require dependable data • clearer low-confidence explanations.</div>
   </details>
 
   <details>
@@ -839,11 +839,16 @@ function priceAttractivenessScore(){
 }
 function opportunityScore(){
  const q=qualityScore(),p=priceAttractivenessScore(),r=state.scores.risk,a=state.scores.analyst;
- return average([finite(q)?q*1.15:null,finite(p)?p*1.25:null,r,a]);
+ const inputs=[q,p,r,a].filter(finite);
+ // A single available category must never create a convincing opportunity score.
+ if(state.dataConfidence<50 || inputs.length<3 || !finite(q) || !finite(p)) return null;
+ return average([q*1.15,p*1.25,r,a]);
 }
 function decisionZones(){
  const d=state.derived;
- if(!validPositive(d.price))return null;
+ // Price-zone calls require both dependable data and real valuation inputs.
+ if(state.dataConfidence<50 || !validPositive(d.price))return null;
+ if(!validPositive(d.target) && !validPositive(d.roughValue) && !finite(d.pe))return null;
  const buy=buyBelowPrice(d);
  const fairCandidates=[d.target,d.roughValue,d.fairEstimate].filter(validPositive);
  let fair=fairCandidates.length?fairCandidates.reduce((a,b)=>a+b,0)/fairCandidates.length:null;
@@ -939,10 +944,13 @@ function quickHistoryData(){
 }
 function renderQuickDecision(zones,signals){
  const q=qualityScore(),p=priceAttractivenessScore(),o=opportunityScore(),risk=state.scores.risk;
- const main=zones?.action||hundredVerdict(hundredPointBreakdown().total);
+ const gated=state.dataConfidence<50;
+ const main=gated?"INSUFFICIENT DATA":(zones?.action||hundredVerdict(hundredPointBreakdown().total));
  $("quickVerdict").textContent=main;
- $("quickZone").textContent=zones?.stateName||"WAIT";
- $("quickSub").textContent=zones?.reason||"Not enough dependable price information for a price-zone decision.";
+ $("quickZone").textContent=gated?"WAIT":(zones?.stateName||"WAIT");
+ $("quickSub").textContent=gated
+   ? `Only ${Object.values(state.scores).filter(finite).length} of 9 scoring sections are available. No Buy, Hold or Avoid call is issued below 50% data confidence.`
+   : (zones?.reason||"Not enough dependable price information for a price-zone decision.");
  $("quickGrid").innerHTML=[
    `<div class="quickTile"><div class="label">Quality</div><strong>${finite(q)?fmt(q,0):"—"}</strong></div>`,
    `<div class="quickTile"><div class="label">Price today</div><strong>${finite(p)?fmt(p,0):"—"}</strong></div>`,
@@ -979,13 +987,19 @@ function hundredPointBreakdown(){
  }
  return {parts,total:available?total/available*100:null,available};
 }
-function hundredVerdict(score){
- if(!finite(score)) return "INSUFFICIENT DATA";
+function hundredVerdict(score,confidence=state.dataConfidence){
+ if(!finite(score) || confidence<50) return "INSUFFICIENT DATA";
  if(score>=90) return "STRONG BUY CANDIDATE";
  if(score>=75) return "BUY CANDIDATE";
  if(score>=60) return "HOLD / WATCH";
  if(score>=40) return "WATCH / CAUTION";
  return "AVOID FOR NOW";
+}
+function confidenceLabel(){
+ const c=state.dataConfidence;
+ if(c>=80)return "High confidence";
+ if(c>=50)return "Moderate confidence";
+ return "Low confidence — recommendation withheld";
 }
 
 function render(){
@@ -995,8 +1009,10 @@ function render(){
  $("price").textContent=money(d.price);
  $("change").textContent=finite(q.dp)?`${pct(q.dp)} • ${q.d>=0?"+":""}${money(q.d)}`:"Price change unavailable";
  $("change").className="change "+(q.dp>0?"pos":q.dp<0?"neg":"flat");
- $("verdict").textContent=state.verdict;$("confidence").textContent=`Data confidence ${fmt(state.dataConfidence,0)}% • Updated ${new Date().toLocaleString()}`;
- $("score").textContent=finite(state.overall)?fmt(state.overall,0):"—";$("scoreRing").style.setProperty("--score",finite(state.overall)?state.overall:0);$("scoreRing").style.setProperty("--ringColor",ringColor(state.overall));
+ $("verdict").textContent=state.verdict;$("confidence").textContent=`${confidenceLabel()} • Data confidence ${fmt(state.dataConfidence,0)}% • Updated ${new Date().toLocaleString()}`;
+ $("score").textContent=state.dataConfidence<50?"—":(finite(state.overall)?fmt(state.overall,0):"—");
+ $("scoreRing").style.setProperty("--score",state.dataConfidence<50?0:(finite(state.overall)?state.overall:0));
+ $("scoreRing").style.setProperty("--ringColor",state.dataConfidence<50?"var(--muted)":ringColor(state.overall));
  $("explain").innerHTML=buildNarrative();
  const pills=[];
  if(finite(d.pe))pills.push(`P/E ${fmt(d.pe,1)}`);if(finite(d.revGrowth))pills.push(`Revenue growth ${pct(d.revGrowth)}`);
@@ -1018,7 +1034,11 @@ function render(){
    ];
    $("priceZones").innerHTML=zoneRows.map(([l,v,on])=>`<div class="zone ${on?"current":""}"><div class="label">${safe(l)}</div><strong>${safe(v)}</strong></div>`).join("");
  }else{
-   $("decisionAction").textContent="INSUFFICIENT PRICE DATA";$("decisionReason").textContent="A live price and dependable valuation inputs are required.";$("decisionState").textContent="WAIT";$("priceZones").innerHTML="";
+   $("decisionAction").textContent=state.dataConfidence<50?"INSUFFICIENT DATA":"INSUFFICIENT PRICE DATA";
+   $("decisionReason").textContent=state.dataConfidence<50
+     ? `Only ${Object.values(state.scores).filter(finite).length} of 9 scoring sections are available. More dependable fundamentals and price data are required.`
+     : "A live price and dependable valuation inputs are required.";
+   $("decisionState").textContent="WAIT";$("priceZones").innerHTML="";
  }
  $("decisionCockpit").innerHTML=decisionCockpitHTML(zones);
  $("decisionSummary").textContent=decisionOneLine(zones);
@@ -1034,10 +1054,14 @@ function render(){
    : "Unavailable";
  const marketCap=first(state.profile.marketCapitalization?state.profile.marketCapitalization*1e6:null,raw(state.summary.price?.marketCap));
  const hp=hundredPointBreakdown();
- const clearVerdict=simpleVerdict(hp.total);
+ const clearVerdict=state.dataConfidence<50?"INSUFFICIENT DATA":simpleVerdict(hp.total);
  const reasonRows=scoreReasonRows(hp);
  $("scoreReasons").innerHTML=reasonRows.map(p=>`<div class="reasonRow"><div><b>${safe(p.key)}</b><div class="reasonNote">${safe(p.note)} • category score ${finite(p.score)?fmt(p.score,0):"—"}/100</div></div><div class="reasonPts">${finite(p.pts)?fmt(p.pts,1):"—"}/${p.max}</div></div>`).join("");
- $("scoreMath").textContent=finite(hp.total)?`Supported categories produce ${fmt(hp.total,1)} out of 100. Missing categories are excluded and disclosed rather than guessed.`:"Not enough supported categories to calculate the score.";
+ $("scoreMath").textContent=finite(hp.total)
+   ? (state.dataConfidence<50
+      ? `Available categories mathematically produce ${fmt(hp.total,1)}/100, but the recommendation is withheld because data confidence is only ${fmt(state.dataConfidence,0)}%.`
+      : `Supported categories produce ${fmt(hp.total,1)} out of 100. Missing categories are excluded and disclosed rather than guessed.`)
+   : "Not enough supported categories to calculate the score.";
  const signals=strongestAndWeakest();
  renderQuickDecision(zones,signals);
  $("strongestSignal").innerHTML=signals.strong?`<b class="pos">✓ Strongest: ${safe(signals.strong.label)}</b><span>${fmt(signals.strong.value,0)}/100 — this is the strongest supported part of the current case.</span>`:`<b>Strongest signal unavailable</b>`;
@@ -1139,9 +1163,13 @@ function render(){
  $("marginSafety").innerHTML=marginSafetyText();
 
  const h=hundredPointBreakdown();
- $("hundredTotal").textContent=finite(h.total)?fmt(h.total,0):"—";
- $("hundredVerdict").textContent=hundredVerdict(h.total);
- $("hundredConfidence").textContent=`${h.available}/100 possible points supported by available data`;
+ $("hundredTotal").textContent=state.dataConfidence<50?"—":(finite(h.total)?fmt(h.total,0):"—");
+ $("hundredRing").style.setProperty("--score",state.dataConfidence<50?0:(finite(h.total)?h.total:0));
+ $("hundredRing").style.setProperty("--ringColor",state.dataConfidence<50?"var(--muted)":ringColor(h.total));
+ $("hundredVerdict").textContent=hundredVerdict(h.total,state.dataConfidence);
+ $("hundredConfidence").textContent=state.dataConfidence<50
+   ? `Recommendation withheld: ${h.available}/100 possible points supported; data confidence ${fmt(state.dataConfidence,0)}%.`
+   : `${h.available}/100 possible points supported by available data`;
  $("hundredRing").style.setProperty("--score",finite(h.total)?h.total:0);$("hundredRing").style.setProperty("--ringColor",ringColor(h.total));
  $("hundredBreakdown").innerHTML=h.parts.map(p=>{
    const shown=finite(p.points)?fmt(p.points,1):"—";
