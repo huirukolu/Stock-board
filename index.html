@@ -199,8 +199,10 @@ async function getYear(symbol){
  let lr=null,la=null;for(let i=raw.length-1;i>=0;i--){if(lr===null&&Number.isFinite(raw[i]))lr=raw[i];if(la===null&&Number.isFinite(adj[i]))la=adj[i];if(lr!==null&&la!==null)break}
  const anchor=Number.isFinite(res.meta?.regularMarketPrice)?res.meta.regularMarketPrice:lr,scale=Number.isFinite(anchor)&&Number.isFinite(la)&&la!==0?anchor/la:1,rows=[];
  for(let i=0;i<raw.length;i++){if(!Number.isFinite(raw[i]))continue;const close=Number.isFinite(adj[i])?adj[i]*scale:raw[i],factor=raw[i]!==0?close/raw[i]:1;rows.push({close,high:Number.isFinite(q.high?.[i])?q.high[i]*factor:close,low:Number.isFinite(q.low?.[i])?q.low[i]*factor:close})}
- if(!rows.length)throw Error("No history rows");const closes=rows.map(r=>r.close);
- return{historyPrice:closes.at(-1),yearHigh:Math.max(...rows.map(r=>r.high)),yearLow:Math.min(...rows.map(r=>r.low)),yearAvg:closes.reduce((a,b)=>a+b,0)/closes.length,yearFirst:closes[0],yearAt:Date.now(),historySource:"Yahoo history"};
+ if(!rows.length)throw Error("No history rows");const closes=rows.map(r=>r.close),lastClose=closes.at(-1),priorClose=closes.length>1?closes.at(-2):null;
+ const dayDollar=Number.isFinite(lastClose)&&Number.isFinite(priorClose)?lastClose-priorClose:null;
+ const dayPct=Number.isFinite(dayDollar)&&Number.isFinite(priorClose)&&priorClose!==0?dayDollar/priorClose*100:null;
+ return{historyPrice:lastClose,dayDollar,dayPct,yearHigh:Math.max(...rows.map(r=>r.high)),yearLow:Math.min(...rows.map(r=>r.low)),yearAvg:closes.reduce((a,b)=>a+b,0)/closes.length,yearFirst:closes[0],yearAt:Date.now(),historySource:"Yahoo history"};
 }
 async function getExtended(symbol){
  const y=yahooSymbol(symbol),path=`/v8/finance/chart/${encodeURIComponent(y)}?range=1d&interval=5m&includePrePost=true&events=history`;
