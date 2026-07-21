@@ -209,7 +209,11 @@ async function getExtended(symbol){
  const j=await fetchJson(yahooUrls(path)),res=j?.chart?.result?.[0];if(!res)throw Error("No extended quote");
  const m=res.meta||{},close=res.indicators?.quote?.[0]?.close||[];let last=null;for(let i=close.length-1;i>=0;i--)if(Number.isFinite(close[i])){last=close[i];break}
  const session=marketSession().key,ext=session==="premarket"?(m.preMarketPrice??last):session==="afterhours"?(m.postMarketPrice??last):null;
- return{extendedPrice:Number.isFinite(ext)?ext:null,regularPrice:Number.isFinite(m.regularMarketPrice)?m.regularMarketPrice:null,extendedSession:session,extendedAt:Date.now(),extendedSource:"Yahoo extended"};
+ const regularPrice=Number.isFinite(m.regularMarketPrice)?m.regularMarketPrice:last;
+ const previousClose=Number.isFinite(m.chartPreviousClose)?m.chartPreviousClose:(Number.isFinite(m.previousClose)?m.previousClose:null);
+ const dayDollar=Number.isFinite(regularPrice)&&Number.isFinite(previousClose)?regularPrice-previousClose:null;
+ const dayPct=Number.isFinite(dayDollar)&&Number.isFinite(previousClose)&&previousClose!==0?dayDollar/previousClose*100:null;
+ return{extendedPrice:Number.isFinite(ext)?ext:null,regularPrice:Number.isFinite(regularPrice)?regularPrice:null,price:Number.isFinite(regularPrice)?regularPrice:null,prev:previousClose,dayDollar,dayPct,extendedSession:session,extendedAt:Date.now(),extendedSource:"Yahoo daily/extended"};
 }
 async function getChart(symbol,range="3mo"){
  const y=yahooSymbol(symbol),interval=range==="1d"?"5m":"1d",path=`/v8/finance/chart/${encodeURIComponent(y)}?range=${range}&interval=${interval}&includePrePost=${range==="1d"?"true":"false"}&events=history`;
@@ -433,7 +437,9 @@ async function refresh(){
  try{
   for(let i=0;i<watch.length;i++){if(stopped)break;const s=watch[i].symbol,old=data[s]||{},merged={...old};$("status").textContent=`Loading ${i+1} of ${watch.length}: ${s}`;let loaded=false;
    if(key){try{Object.assign(merged,await getQuote(s,key));quoteOk++;loaded=true}catch(e){quoteFail++;if(String(e.message||e).includes("rate limited")||String(e.message||e).includes("cooldown"))rateLimited=true}}
-   const session=marketSession().key;if(["premarket","afterhours"].includes(session)&&(!old.extendedAt||Date.now()-old.extendedAt>10*60*1000)){try{Object.assign(merged,await getExtended(s))}catch(e){}}
+   const session=marketSession().key;
+   const needDaily=!Number.isFinite(merged.dayPct)||!old.extendedAt||Date.now()-old.extendedAt>10*60*1000;
+   if(needDaily){try{Object.assign(merged,await getExtended(s));if(Number.isFinite(merged.price))loaded=true}catch(e){}}
    const needYear=!old.yearAt||Date.now()-old.yearAt>24*60*60*1000;if(needYear){try{Object.assign(merged,await getYear(s));if(!loaded&&Number.isFinite(merged.historyPrice)){merged.price=merged.historyPrice;loaded=true}}catch(e){}}else if(!loaded&&Number.isFinite(merged.historyPrice)){merged.price=merged.historyPrice;loaded=true}
    data[s]=merged;loaded?ok++:fail++;save();render();await sleep(needYear?1200:350);
   }
@@ -532,7 +538,7 @@ $("importFile").onchange=async e=>{
  }catch(err){alert("That backup file could not be restored.");}
  finally{e.target.value="";}
 };
-$("reset").onclick=()=>{if(confirm("Restore the permanent 28-stock base list?")){watch=ORIGINAL.map(x=>({symbol:x[0],name:x[1]}));data={};alerts={};openCharts={};save();render();refresh()}}
+$("reset").onclick=()=>{if(confirm("Restore the base 28-stock list?")){watch=ORIGINAL.map(x=>({symbol:x[0],name:x[1]}));const keep=new Set(watch.map(x=>x.symbol));data=Object.fromEntries(Object.entries(data).filter(([symbol])=>keep.has(symbol)));alerts=Object.fromEntries(Object.entries(alerts).filter(([symbol])=>keep.has(symbol)));openCharts={};save();render();refresh()}}
 function createAutoBackup(){const backup={version:2,exportedAt:new Date().toISOString(),watchlist:watch,alerts,openCharts,xrayNotes:typeof collectXrayNotes==="function"?collectXrayNotes():{},holdings};try{localStorage.setItem("steveAutoBackup",JSON.stringify(backup))}catch(e){}}
 function checkAutoBackup(){const rawBackup=localStorage.getItem("steveAutoBackup");if(!rawBackup||watch.length)return;try{const b=JSON.parse(rawBackup);if(Array.isArray(b.watchlist)&&b.watchlist.length){watch=b.watchlist;alerts=b.alerts&&typeof b.alerts==="object"?b.alerts:{};openCharts=b.openCharts&&typeof b.openCharts==="object"?b.openCharts:{};if(typeof restoreXrayNotes==="function")restoreXrayNotes(b.xrayNotes);holdings=b.holdings&&typeof b.holdings==="object"?b.holdings:{};save();showToast("Auto-backup restored","info")}}catch(e){}}
 function startAuto(){if(autoTimer)clearInterval(autoTimer);if(backupTimer)clearInterval(backupTimer);autoTimer=setInterval(()=>{if(!document.hidden)refresh()},AUTO_REFRESH_MS);backupTimer=setInterval(createAutoBackup,3600000)}
