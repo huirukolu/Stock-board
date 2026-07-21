@@ -230,7 +230,7 @@ function marketSession(){
 }
 function updateMarketBadge(){const m=marketSession(),b=$("marketBadge");b.textContent=m.label;b.className="marketbadge "+(m.key==="open"?"open":(["premarket","afterhours"].includes(m.key)?"extended":""))}
 function yahooSymbol(s){return s}
-function yahooUrls(path){const a=`https://query1.finance.yahoo.com${path}`,b=`https://query2.finance.yahoo.com${path}`;return[a,b,`https://corsproxy.io/?url=${encodeURIComponent(a)}`,`https://api.allorigins.win/raw?url=${encodeURIComponent(a)}`]}
+function yahooUrls(path){const a=`https://query1.finance.yahoo.com${path}`,b=`https://query2.finance.yahoo.com${path}`;return[a,b,`https://corsproxy.io/?url=${encodeURIComponent(a)}`,`https://api.allorigins.win/raw?url=${encodeURIComponent(a)}`,`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(a)}`,`https://thingproxy.freeboard.io/fetch/${a}`]}
 async function fetchJson(urls){
  let last;
  for(const url of urls){
