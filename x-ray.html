@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#07090c">
 <meta name="description" content="Steve's Stock X-Ray — valuation, fundamentals, news, analyst ratings and an explained research score.">
-<title>Steve's Stock X-Ray 6.2</title>
+<title>Steve's Stock X-Ray 6.3</title>
 <style>
 :root{
   --bg:#07090c;--panel:#11161d;--panel2:#171e27;--text:#f5f7fa;--muted:#9ba8b7;
@@ -82,7 +82,7 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
 </head>
 <body>
 <header>
-  <div class="headerline"><div><h1>Steve's Stock X-Ray 6.2</h1><div class="sub">Fast decisions with a five-second summary, Board context, score history, price zones and explained scoring</div></div><button id="backBtn">Board</button></div>
+  <div class="headerline"><div><h1>Steve's Stock X-Ray 6.3</h1><div class="sub">Fast decisions with a five-second summary, Board context, score history, price zones and explained scoring</div></div><button id="backBtn">Board</button></div>
 </header>
 <main>
   <div class="searchbar">
@@ -285,7 +285,7 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
   </div>
 
   <details>
-    <summary>What’s new in Version 6.2 <span class="releaseBadge">NEW</span></summary>
+    <summary>What’s new in Version 6.3 <span class="releaseBadge">NEW</span></summary>
     <div class="note" style="margin-top:10px">Added Yahoo fundamentals time-series fallback • calculates growth, margins, cash flow and balance-sheet ratios when summary feeds omit them • improved analyst and dividend field mapping • retains the 6.1 retry and Board-cache protections.</div>
   </details>
 
@@ -550,7 +550,7 @@ async function fetchTimeout(url,opts={},ms=14000,retries=1){
 }
 function yahooUrls(path){
  const a=`https://query1.finance.yahoo.com${path}`,b=`https://query2.finance.yahoo.com${path}`;
- return[a,b,`https://corsproxy.io/?url=${encodeURIComponent(a)}`,`https://api.allorigins.win/raw?url=${encodeURIComponent(a)}`];
+ return[a,b,`https://corsproxy.io/?url=${encodeURIComponent(a)}`,`https://api.allorigins.win/raw?url=${encodeURIComponent(a)}`,`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(a)}`,`https://thingproxy.freeboard.io/fetch/${a}`];
 }
 async function tryUrls(urls){
  let last;for(const u of urls){try{return await fetchTimeout(u)}catch(e){last=e}}throw last||Error("Unavailable");
@@ -580,25 +580,34 @@ async function finnhub(path,key){
 }
 function getBoardCache(symbol){
  let context=null;
- const merge=v=>{if(v&&typeof v==="object"&&String(v.symbol||symbol).toUpperCase()===symbol)context={...(context||{}),...v,symbol}};
+ const normalized=String(symbol||"").toUpperCase();
+ const merge=(v,{requireSymbol=false}={})=>{
+  if(!v||typeof v!=="object")return;
+  const declared=String(v.symbol||v.ticker||v.code||"").toUpperCase();
+  if(requireSymbol&&!declared)return;
+  if(declared&&declared!==normalized)return;
+  context={...(context||{}),...v,symbol:normalized};
+ };
  try{
-  const q=new URLSearchParams(location.search),v={symbol};
+  const q=new URLSearchParams(location.search),v={symbol:normalized};
   for(const k of ["name","rank","total","score","quality","value","price","previousClose","yearHigh","yearLow","belowHigh","aboveLow","ytd","range"]){
    const x=q.get(k);if(x!==null)v[k]=k==="name"?x:Number(x);
   }
   if(Object.keys(v).length>1)merge(v);
  }catch(e){}
- try{merge(JSON.parse(localStorage.getItem(`stockBoardContext:${symbol}`)||"null"))}catch(e){}
+ // A ticker-scoped key is safe even when the stored object omits its symbol.
+ try{merge(JSON.parse(localStorage.getItem(`stockBoardContext:${normalized}`)||"null"))}catch(e){}
+ // Shared keys can contain the previously viewed stock, so require an explicit symbol match.
  for(const key of ["stockBoardContext","boardXrayContext","xrayBoardContext"]){
-  try{merge(JSON.parse(localStorage.getItem(key)||"null"))}catch(e){}
+  try{merge(JSON.parse(localStorage.getItem(key)||"null"),{requireSymbol:true})}catch(e){}
  }
  try{
   const full=JSON.parse(localStorage.getItem("steveXrayBoardCacheV2")||"null");
-  merge(full?.stocks?.[symbol]);
+  merge(full?.stocks?.[normalized]);
  }catch(e){}
  try{
   const boardData=JSON.parse(localStorage.getItem("steveDataV5")||"{}");
-  merge(boardData?.[symbol]);
+  merge(boardData?.[normalized]);
  }catch(e){}
  return context;
 }
@@ -662,10 +671,49 @@ function mergeDeep(target,source){
  }
  return target;
 }
+function validBoardQuote(b){
+ if(!b||!finite(b.price)||Number(b.price)<=0)return false;
+ const p=Number(b.price),lo=finite(b.yearLow)?Number(b.yearLow):null,hi=finite(b.yearHigh)?Number(b.yearHigh):null;
+ if(finite(lo)&&finite(hi)&&(!(lo>0)||hi<lo))return false;
+ if(finite(lo)&&p<lo*.45)return false;
+ if(finite(hi)&&p>hi*1.55)return false;
+ return true;
+}
+function syncDataCache(symbol){
+ let cached;
+ try{cached=JSON.parse(localStorage.getItem(`xrayDataCache:${symbol}`)||"null")}catch(e){cached=null}
+ let usedFallback=false;
+ if(cached){
+  if(!finite(state.quote.c)&&finite(cached.quote?.c)){state.quote.c=cached.quote.c;state.quote.pc=cached.quote.pc;usedFallback=true}
+  if(!state.profile?.name&&cached.profile?.name){state.profile=state.profile||{};state.profile.name=cached.profile.name;usedFallback=true}
+  if(cached.metrics&&typeof cached.metrics==="object"){
+   state.metrics=state.metrics||{};
+   for(const [k,v] of Object.entries(cached.metrics)){if(!finite(state.metrics[k])&&v!=null){state.metrics[k]=v;usedFallback=true}}
+  }
+  if(cached.summary&&typeof cached.summary==="object"){
+   state.summary=state.summary||{};
+   for(const [group,obj] of Object.entries(cached.summary)){
+    if(!obj||typeof obj!=="object")continue;
+    state.summary[group]=state.summary[group]||{};
+    for(const [k,v] of Object.entries(obj)){
+     const cur=state.summary[group][k],curVal=cur&&typeof cur==="object"?cur.raw:cur;
+     if(!finite(curVal)&&v!=null){state.summary[group][k]=v;usedFallback=true}
+    }
+   }
+  }
+  if((!state.yahooFundamentals||!Array.isArray(state.yahooFundamentals.result)||!state.yahooFundamentals.result.length)&&cached.yahooFundamentals?.result?.length){
+   state.yahooFundamentals=cached.yahooFundamentals;usedFallback=true;
+  }
+ }
+ state.cacheFallbackUsed=usedFallback;state.cacheFallbackAge=usedFallback?(cached?.savedAt||null):null;
+ try{
+  localStorage.setItem(`xrayDataCache:${symbol}`,JSON.stringify({savedAt:Date.now(),quote:{c:state.quote.c,pc:state.quote.pc},profile:{name:state.profile?.name},metrics:state.metrics,summary:state.summary,yahooFundamentals:state.yahooFundamentals}));
+ }catch(e){}
+}
 function applyBoardFallback(symbol){
  const b=getBoardCache(symbol);state.boardData=b;state.boardFallbackUsed=false;if(!b)return;
  if(!state.profile.name&&b.name)state.profile.name=b.name;
- if(!finite(state.quote.c)&&finite(b.price)){state.quote.c=Number(b.price);state.quote.pc=finite(b.previousClose)?Number(b.previousClose):null;state.boardFallbackUsed=true}
+ if(!finite(state.quote.c)&&validBoardQuote(b)){state.quote.c=Number(b.price);state.quote.pc=finite(b.previousClose)?Number(b.previousClose):null;state.boardFallbackUsed=true}
  state.summary=state.summary||{};state.summary.summaryDetail=state.summary.summaryDetail||{};
  if(!finite(raw(state.summary.summaryDetail.fiftyTwoWeekHigh))&&finite(b.yearHigh)){state.summary.summaryDetail.fiftyTwoWeekHigh={raw:Number(b.yearHigh)};state.boardFallbackUsed=true}
  if(!finite(raw(state.summary.summaryDetail.fiftyTwoWeekLow))&&finite(b.yearLow)){state.summary.summaryDetail.fiftyTwoWeekLow={raw:Number(b.yearLow)};state.boardFallbackUsed=true}
@@ -728,12 +776,13 @@ async function loadAll(symbol){
    const part=v?.quoteSummary?.result?.[0]||{};mergeDeep(state.summary,part);
   }
  }
+ syncDataCache(symbol);
  applyBoardFallback(symbol);
  state.name=state.profile.name||textPick("summary.price.longName","summary.price.shortName")||state.boardData?.name||symbol;
  const successes=r.map((x,i)=>x.status==="fulfilled"?names[i]:null).filter(Boolean);
  const failures=r.map((x,i)=>x.status==="rejected"?`${names[i]}: ${String(x.reason?.message||x.reason)}`:null).filter(Boolean);
  state.sourceReport={successes,failures};
- return {success:successes.length,total:r.length,boardFallback:state.boardFallbackUsed,errors:failures};
+ return {success:successes.length,total:r.length,boardFallback:state.boardFallbackUsed,cacheFallback:state.cacheFallbackUsed,cacheAge:state.cacheFallbackAge,errors:failures};
 }
 function compute(){
  const q=state.quote,m=state.metrics,s=state.summary,y=state.yahooFundamentals||{};
@@ -1380,7 +1429,9 @@ async function analyze(){
    compute();render();
    const limited=result.success<3?" Some free-data sections were unavailable.":result.success<result.total?" Some optional sections were unavailable.":"";
    const cacheNote=result.boardFallback?" Board cache was used as a fallback.":"";
-   $("status").textContent=`X-Ray complete • ${result.success}/${result.total} sources responded.${limited}${cacheNote}${result.errors?.length?` • ${result.errors.length} source failures recorded in the browser console.`:""}`; console.info("X-Ray source report",state.sourceReport);
+   const staleAgeMin=result.cacheAge?Math.round((Date.now()-result.cacheAge)/60000):null;
+   const staleNote=result.cacheFallback?(staleAgeMin!=null?` Some fields are from your last successful load (${staleAgeMin<60?`${staleAgeMin}m`:`${Math.round(staleAgeMin/60)}h`} ago) because today's data sources failed.`:" Some fields are from your last successful load because today's data sources failed."):"";
+   $("status").textContent=`X-Ray complete • ${result.success}/${result.total} sources responded.${limited}${cacheNote}${staleNote}${result.errors?.length?` • ${result.errors.length} source failures recorded in the browser console.`:""}`; console.info("X-Ray source report",state.sourceReport);
    history.replaceState(null,"",`?ticker=${encodeURIComponent(symbol)}`);
  }catch(e){
    $("status").textContent=`Could not analyze ${symbol}: ${e.message||e}. Check the ticker and Finnhub key.`;
