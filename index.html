@@ -88,7 +88,7 @@ details{margin-top:16px;background:var(--panel);border:1px solid var(--line);bor
   <div id="portfolioList" class="portfolioList"></div>
 </section>
 <div id="list" class="list"></div>
-<div class="tools"><input id="newTicker" placeholder="Add ticker, for example AMZN"><button id="add">Add stock</button><button id="export">Backup board</button><button id="exportCSV">Export CSV</button><button id="import">Restore board</button><button id="reset">Restore original 50</button><input id="importFile" type="file" accept="application/json,.json" hidden></div>
+<div class="tools"><input id="newTicker" placeholder="Add ticker, for example AMZN"><button id="add">Add stock</button><button id="export">Backup board</button><button id="exportCSV">Export CSV</button><button id="import">Restore board</button><button id="reset">Restore base 28</button><input id="importFile" type="file" accept="application/json,.json" hidden></div>
 <details>
 <summary>Settings — free market data</summary>
 <div class="settings">
@@ -102,14 +102,34 @@ details{margin-top:16px;background:var(--panel);border:1px solid var(--line);bor
 <div id="toastContainer" style="position:fixed;bottom:18px;right:12px;left:12px;z-index:9999;display:flex;flex-direction:column;gap:8px;max-width:380px;margin-left:auto;pointer-events:none"></div>
 <script>
 const ORIGINAL=[
-["VTI","Vanguard Total Stock Market ETF"],["TSM","Taiwan Semiconductor"],["QQQM","Invesco NASDAQ 100 ETF"],["META","Meta Platforms"],["MU","Micron Technology"],
-["TEL","TE Connectivity"],["NVDA","NVIDIA"],["AVGO","Broadcom"],["GEV","GE Vernova"],["APH","Amphenol"],["NVT","nVent Electric"],["AMAT","Applied Materials"],
-["SOXQ","Invesco Semiconductor ETF"],["TTE","TotalEnergies"],["ALGM","Allegro MicroSystems"],["LRCX","Lam Research"],["RTX","RTX Corporation"],["RMBS","Rambus"],
-["BYDDY","BYD Company"],["CEG","Constellation Energy"],["VST","Vistra"],["VRT","Vertiv"],["CRDO","Credo Technology"],["GLO","Clough Global Opportunities"],
-["FN","Fabrinet"],["MELI","MercadoLibre"],["PYPL","PayPal"],["KLAC","KLA"],["FLEX","Flex"],["AMD","Advanced Micro Devices"],["NBIS","Nebius Group"],
-["MRVL","Marvell Technology"],["CMI","Cummins"],["CAT","Caterpillar"],["EQT","EQT"],["HWM","Howmet Aerospace"],["ET","Energy Transfer"],["ONTO","Onto Innovation"],
-["SKHY","SK hynix ADR"],["RKLB","Rocket Lab"],["ETN","Eaton"],["SNDK","SanDisk"],["HPE","Hewlett Packard Enterprise"],["IONQ","IonQ"],["ZTS","Zoetis"],
-["WDC","Western Digital"],["DELL","Dell Technologies"],["CSCO","Cisco Systems"],["DUK","Duke Energy"],["ANET","Arista Networks"]];
+["VTI","Vanguard Total Stock Market ETF"],
+["TSM","Taiwan Semiconductor"],
+["QQQM","Invesco NASDAQ 100 ETF"],
+["META","Meta Platforms"],
+["MU","Micron Technology"],
+["NVDA","NVIDIA"],
+["AVGO","Broadcom"],
+["GEV","GE Vernova"],
+["APH","Amphenol"],
+["NVT","nVent Electric"],
+["AMAT","Applied Materials"],
+["LRCX","Lam Research"],
+["VST","Vistra"],
+["CRDO","Credo Technology"],
+["FN","Fabrinet"],
+["KLAC","KLA"],
+["AMD","Advanced Micro Devices"],
+["MRVL","Marvell Technology"],
+["HWM","Howmet Aerospace"],
+["ETN","Eaton"],
+["DELL","Dell Technologies"],
+["ANET","Arista Networks"],
+["ASML","ASML"],
+["ORCL","Oracle"],
+["GOOGL","Alphabet"],
+["MSFT","Microsoft"],
+["AMZN","Amazon"],
+["SKHY","SK hynix ADR"]];
 
 const QUALITY={
 VTI:88,TSM:94,QQQM:90,META:93,MU:88,TEL:87,NVDA:95,AVGO:94,GEV:84,APH:91,NVT:80,AMAT:91,SOXQ:84,TTE:76,ALGM:73,LRCX:91,RTX:84,RMBS:70,BYDDY:82,CEG:86,VST:82,VRT:84,CRDO:75,GLO:62,FN:86,MELI:91,PYPL:76,KLAC:93,FLEX:78,AMD:88,NBIS:68,MRVL:82,CMI:84,CAT:88,EQT:78,HWM:88,ET:78,ONTO:84,SKHY:89,RKLB:67,ETN:92,SNDK:74,HPE:73,IONQ:57,ZTS:88,WDC:76,DELL:80,CSCO:80,DUK:82,ANET:94
@@ -510,7 +530,7 @@ $("importFile").onchange=async e=>{
  }catch(err){alert("That backup file could not be restored.");}
  finally{e.target.value="";}
 };
-$("reset").onclick=()=>{if(confirm("Restore the original 50-stock list?")){watch=ORIGINAL.map(x=>({symbol:x[0],name:x[1]}));data={};alerts={};openCharts={};save();render();refresh()}}
+$("reset").onclick=()=>{if(confirm("Restore the permanent 28-stock base list?")){watch=ORIGINAL.map(x=>({symbol:x[0],name:x[1]}));data={};alerts={};openCharts={};save();render();refresh()}}
 function createAutoBackup(){const backup={version:2,exportedAt:new Date().toISOString(),watchlist:watch,alerts,openCharts,xrayNotes:typeof collectXrayNotes==="function"?collectXrayNotes():{},holdings};try{localStorage.setItem("steveAutoBackup",JSON.stringify(backup))}catch(e){}}
 function checkAutoBackup(){const rawBackup=localStorage.getItem("steveAutoBackup");if(!rawBackup||watch.length)return;try{const b=JSON.parse(rawBackup);if(Array.isArray(b.watchlist)&&b.watchlist.length){watch=b.watchlist;alerts=b.alerts&&typeof b.alerts==="object"?b.alerts:{};openCharts=b.openCharts&&typeof b.openCharts==="object"?b.openCharts:{};if(typeof restoreXrayNotes==="function")restoreXrayNotes(b.xrayNotes);holdings=b.holdings&&typeof b.holdings==="object"?b.holdings:{};save();showToast("Auto-backup restored","info")}}catch(e){}}
 function startAuto(){if(autoTimer)clearInterval(autoTimer);if(backupTimer)clearInterval(backupTimer);autoTimer=setInterval(()=>{if(!document.hidden)refresh()},AUTO_REFRESH_MS);backupTimer=setInterval(createAutoBackup,3600000)}
