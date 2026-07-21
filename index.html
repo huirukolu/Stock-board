@@ -349,6 +349,21 @@ window.editHolding=s=>{
  holdings[s]={shares,cost};save();render();showToast(`${s} holding saved`,"success");
 };
 window.removeHolding=s=>{if(confirm(`Remove ${s} from Portfolio Center?`)){delete holdings[s];save();render();showToast(`${s} removed from Portfolio Center`,"info")}};
+function saveXrayContext(x,total){
+ try{
+  const context={
+   symbol:x.symbol,name:x.name,rank:Number.isFinite(x.opportunityRank)?x.opportunityRank:null,total:Number.isFinite(total)?total:null,
+   score:Number.isFinite(x.opportunity)?x.opportunity:null,quality:Number.isFinite(x.quality)?x.quality:null,value:Number.isFinite(x.value)?x.value:null,
+   price:Number.isFinite(x.price)?x.price:null,dayPct:Number.isFinite(x.dayPct)?x.dayPct:null,dayDollar:Number.isFinite(x.dayDollar)?x.dayDollar:null,
+   previousClose:Number.isFinite(x.prev)?x.prev:null,yearHigh:Number.isFinite(x.yearHigh)?x.yearHigh:null,yearLow:Number.isFinite(x.yearLow)?x.yearLow:null,
+   yearAvg:Number.isFinite(x.yearAvg)?x.yearAvg:null,yearFirst:Number.isFinite(x.yearFirst)?x.yearFirst:null,belowHigh:Number.isFinite(x.belowHigh)?x.belowHigh:null,
+   aboveLow:Number.isFinite(x.aboveLow)?x.aboveLow:null,ytd:Number.isFinite(x.ytd)?x.ytd:null,range:Number.isFinite(x.range)?x.range:null,
+   quoteAt:Number.isFinite(x.quoteAt)?x.quoteAt:null,yearAt:Number.isFinite(x.yearAt)?x.yearAt:null,savedAt:Date.now()
+  };
+  localStorage.setItem("stockBoardContext",JSON.stringify(context));
+ }catch(e){console.warn("Could not pass Board context to X-Ray",e)}
+ return true;
+}
 function render(){
  const calculatedAll=watch.map(w=>calculated({...w,...(data[w.symbol]||{})}));
  const portfolioMode=view==="portfolio";$("portfolioCenter").hidden=!portfolioMode;$("list").hidden=portfolioMode;$("search").disabled=portfolioMode;$("sort").disabled=portfolioMode;$("portfolioCenter").style.display=portfolioMode?"block":"none";if(portfolioMode)renderPortfolio(calculatedAll);
@@ -357,7 +372,7 @@ function render(){
  $("gainers").innerHTML=mini([...all].sort((a,b)=>b.dayPct-a.dayPct));$("losers").innerHTML=mini([...all].sort((a,b)=>a.dayPct-b.dayPct));
  const rows=allRows(calculatedAll);$("list").innerHTML=rows.length?rows.map(x=>`
  <article class="stock ${x.hitLow?"alert-low":""} ${x.hitHigh?"alert-high":""}">
- <div class="stock-top"><div><a href="x-ray.html?ticker=${encodeURIComponent(x.symbol)}"><div class="symbol">${Number.isFinite(x.opportunityRank)?`<span class="rankbadge">#${x.opportunityRank}</span>`:""}${x.symbol}</div><div class="company">${x.name}</div></a></div>
+ <div class="stock-top"><div><a class="xray-link" data-xray-symbol="${x.symbol}" href="x-ray.html?ticker=${encodeURIComponent(x.symbol)}"><div class="symbol">${Number.isFinite(x.opportunityRank)?`<span class="rankbadge">#${x.opportunityRank}</span>`:""}${x.symbol}</div><div class="company">${x.name}</div></a></div>
  <div><div class="price">${Number.isFinite(x.price)?"$"+num(x.price):"—"}</div><div class="day ${cls(x.dayPct)}">${pct(x.dayPct)}${Number.isFinite(x.dayDollar)?` • ${x.dayDollar>=0?"+":""}$${num(x.dayDollar)}`:""}</div>
  ${Number.isFinite(x.extendedPrice)&&["premarket","afterhours"].includes(x.extendedSession)?`<div class="extended">${x.extendedSession==="premarket"?"Pre":"After"}: $${num(x.extendedPrice)}${Number.isFinite(x.regularPrice)?` (${pct((x.extendedPrice/x.regularPrice-1)*100)})`:""}</div>`:""}</div></div>
  <div class="metrics">
@@ -554,6 +569,18 @@ window.addEventListener("resize",()=>{
  },180);
 });
 document.addEventListener("keydown",e=>{if(e.key==="/"&&!/input|select|textarea/i.test(document.activeElement?.tagName)){e.preventDefault();$("search").focus()}if((e.key==="r"||e.key==="R")&&!/input|select|textarea/i.test(document.activeElement?.tagName))refresh()});
+document.addEventListener("click",e=>{
+ const a=e.target.closest?.("a.xray-link[data-xray-symbol]");
+ if(!a)return;
+ const symbol=String(a.dataset.xraySymbol||"").toUpperCase();
+ const calculatedAll=watch.map(w=>calculated({...w,...(data[w.symbol]||{})}));
+ const row=calculatedAll.find(v=>v.symbol===symbol);
+ if(row){
+  const ranked=[...calculatedAll].filter(v=>Number.isFinite(v.opportunity)).sort((a,b)=>b.opportunity-a.opportunity);
+  const rank=ranked.findIndex(v=>v.symbol===symbol);
+  saveXrayContext({...row,opportunityRank:rank>=0?rank+1:null},ranked.length||calculatedAll.length);
+ }
+},true);
 function bootBoard(){
  try{
   checkAutoBackup();
