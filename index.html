@@ -322,6 +322,13 @@ function portfolioAction(x,gainPct){
  if(gainPct<-15&&Number.isFinite(x.opportunity)&&x.opportunity<48)return "REVIEW THESIS — the position is down and the Board setup is weak.";
  return "HOLD / MONITOR — no strong add or trim signal from the current Board data.";
 }
+
+function xrayHref(x){
+ const q=new URLSearchParams({ticker:x.symbol});
+ const fields={name:x.name,rank:x.opportunityRank,total:watch.length,score:x.opportunity,quality:x.quality,value:x.value,price:x.price,previousClose:x.prev,yearHigh:x.yearHigh,yearLow:x.yearLow,belowHigh:x.belowHigh,aboveLow:x.aboveLow,ytd:x.ytd,range:x.range};
+ for(const [k,v] of Object.entries(fields))if(v!==null&&v!==undefined&&v!==""&&(typeof v!=="number"||Number.isFinite(v)))q.set(k,String(v));
+ return `x-ray.html?${q.toString()}`;
+}
 function renderPortfolio(calculatedAll){
  const rows=calculatedAll.filter(x=>holdings[x.symbol]&&Number(holdings[x.symbol].shares)>0);
  let totalValue=0,totalCost=0;
@@ -339,7 +346,7 @@ function renderPortfolio(calculatedAll){
  $("portfolioCount").textContent=String(enriched.length);
  $("portfolioList").innerHTML=enriched.length?enriched.map(x=>{
    const weight=totalValue>0?x.positionValue/totalValue*100:null;
-   return `<article class="holding"><div class="holdingTop"><div><div class="symbol"><a class="xray-link" data-xray-symbol="${x.symbol}" href="x-ray.html?ticker=${encodeURIComponent(x.symbol)}">${x.symbol}</a></div><div class="company">${x.name}</div></div><div><div class="price">$${num(x.positionValue)}</div><div class="day ${cls(x.gain)}">${x.gain>=0?"+":"-"}$${num(Math.abs(x.gain))} • ${pct(x.gainPct)}</div></div></div>
+   return `<article class="holding"><div class="holdingTop"><div><div class="symbol"><a class="xray-link" data-xray-symbol="${x.symbol}" href="${xrayHref(x)}">${x.symbol}</a></div><div class="company">${x.name}</div></div><div><div class="price">$${num(x.positionValue)}</div><div class="day ${cls(x.gain)}">${x.gain>=0?"+":"-"}$${num(Math.abs(x.gain))} • ${pct(x.gainPct)}</div></div></div>
    <div class="holdingGrid"><div class="metric"><div class="label">Shares</div><div class="value">${num(x.shares,4)}</div></div><div class="metric"><div class="label">Average cost</div><div class="value">$${num(x.cost)}</div></div><div class="metric"><div class="label">Current price</div><div class="value">${Number.isFinite(x.price)?"$"+num(x.price):"—"}</div></div><div class="metric"><div class="label">Portfolio weight</div><div class="value">${Number.isFinite(weight)?num(weight,1)+"%":"—"}</div></div><div class="metric"><div class="label">Board opportunity</div><div class="value">${Number.isFinite(x.opportunity)?num(x.opportunity,0)+"/100":"—"}</div></div><div class="metric"><div class="label">Quality</div><div class="value">${Number.isFinite(x.quality)?num(x.quality,0):"—"}</div></div><div class="metric"><div class="label">Value</div><div class="value">${Number.isFinite(x.value)?num(x.value,0):"—"}</div></div><div class="metric"><div class="label">Below 2026 high</div><div class="value">${Number.isFinite(x.belowHigh)?num(Math.abs(x.belowHigh),1)+"%":"—"}</div></div></div>
    <div class="holdingAction"><b>Portfolio guide:</b> ${portfolioAction(x,x.gainPct)}</div><div class="actions" style="margin-top:9px"><button onclick="editHolding('${x.symbol}')">Edit holding</button><button class="remove" onclick="removeHolding('${x.symbol}')">Remove holding</button></div></article>`;
  }).join(""):'<div class="portfolioEmpty">No holdings entered yet. Tap “Add holding,” or use the Portfolio button on any stock card.</div>';
@@ -397,7 +404,7 @@ function render(){
  $("gainers").innerHTML=mini([...all].sort((a,b)=>b.dayPct-a.dayPct));$("losers").innerHTML=mini([...all].sort((a,b)=>a.dayPct-b.dayPct));
  const rows=allRows(calculatedAll);$("list").innerHTML=rows.length?rows.map(x=>`
  <article class="stock ${x.hitLow?"alert-low":""} ${x.hitHigh?"alert-high":""}">
- <div class="stock-top"><div><a class="xray-link" data-xray-symbol="${x.symbol}" href="x-ray.html?ticker=${encodeURIComponent(x.symbol)}"><div class="symbol">${Number.isFinite(x.opportunityRank)?`<span class="rankbadge">#${x.opportunityRank}</span>`:""}${x.symbol}</div><div class="company">${x.name}</div></a></div>
+ <div class="stock-top"><div><a class="xray-link" data-xray-symbol="${x.symbol}" href="${xrayHref(x)}"><div class="symbol">${Number.isFinite(x.opportunityRank)?`<span class="rankbadge">#${x.opportunityRank}</span>`:""}${x.symbol}</div><div class="company">${x.name}</div></a></div>
  <div><div class="price">${Number.isFinite(x.price)?"$"+num(x.price):"—"}</div><div class="day ${cls(x.dayPct)}">${pct(x.dayPct)}${Number.isFinite(x.dayDollar)?` • ${x.dayDollar>=0?"+":""}$${num(x.dayDollar)}`:""}</div>
  ${Number.isFinite(x.extendedPrice)&&["premarket","afterhours"].includes(x.extendedSession)?`<div class="extended">${x.extendedSession==="premarket"?"Pre":"After"}: $${num(x.extendedPrice)}${Number.isFinite(x.regularPrice)?` (${pct((x.extendedPrice/x.regularPrice-1)*100)})`:""}</div>`:""}</div></div>
  <div class="metrics">
