@@ -1004,18 +1004,16 @@ function snapshot(){
  };
 }
 async function analyzeSymbolForCompare(symbol){
- const saved=snapshot();
- const old={
-  symbol:state.symbol,name:state.name,quote:state.quote,profile:state.profile,metrics:state.metrics,
-  summary:state.summary,recommendations:state.recommendations,news:state.news,scores:state.scores,
-  confidence:state.confidence,overall:state.overall,verdict:state.verdict,derived:state.derived
- };
- state.symbol=symbol;
- await loadAll(symbol);
- compute();
- const result=snapshot();
- Object.assign(state,old);
- return result;
+ const old=typeof structuredClone==="function"?structuredClone(state):JSON.parse(JSON.stringify(state));
+ try{
+  state.symbol=symbol;
+  await loadAll(symbol);
+  compute();
+  return snapshot();
+ }finally{
+  for(const key of Object.keys(state))delete state[key];
+  Object.assign(state,old);
+ }
 }
 function renderCompare(a,b){
  $("compareSection").hidden=false;
@@ -1489,7 +1487,7 @@ $("compareBtn").onclick=async()=>{
    const a=snapshot();
    const b=await analyzeSymbolForCompare(other);
    renderCompare(a,b);
-   $("status").textContent=`Comparison complete: ${state.symbol} versus ${other}.`;
+   $("status").textContent=`Comparison complete: ${a.symbol} versus ${other}.`;
  }catch(e){
    $("status").textContent=`Could not compare ${other}: ${e.message||e}`;
  }finally{compareInProgress=false;$("compareBtn").disabled=false}
