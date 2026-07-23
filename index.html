@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#07090c">
 <meta name="description" content="Steve's Stock Board — live quotes, ranked opportunities, charts, alerts, and watchlist backup.">
-<title>Steve's Stock Board 5.4</title>
+<title>Steve's Stock Board 5.5</title>
 <style>
 :root{--bg:#07090c;--panel:#11161d;--panel2:#171e27;--text:#f5f7fa;--muted:#9ba8b7;--line:#29323e;--green:#21d765;--red:#ff6257;--blue:#67adff;--gold:#ffd166}
 *{box-sizing:border-box}
@@ -50,7 +50,7 @@ details{margin-top:16px;background:var(--panel);border:1px solid var(--line);bor
 </head>
 <body>
 <header>
-<div class="headerline"><h1>Steve's Stock Board 5.4</h1><span id="marketBadge" class="marketbadge">Checking market…</span></div>
+<div class="headerline"><h1>Steve's Stock Board 5.5</h1><span id="marketBadge" class="marketbadge">Checking market…</span></div>
 <div class="sub">Live quotes • ranked opportunities • Portfolio Center • tap any ticker for Stock X-Ray • charts • visual alerts</div>
 </header>
 <main>
@@ -138,7 +138,8 @@ const ORIGINAL=[
 ["GOOGL","Alphabet"],
 ["MSFT","Microsoft"],
 ["AMZN","Amazon"],
-["SKHY","SK hynix ADR"]];
+["SKHY","SK hynix ADR"],
+["TEL","TE Connectivity"]];
 
 const QUALITY={
 VTI:88,TSM:94,QQQM:90,META:93,MU:88,TEL:87,NVDA:95,AVGO:94,GEV:84,APH:91,NVT:80,AMAT:91,SOXQ:84,TTE:76,ALGM:73,LRCX:91,RTX:84,RMBS:70,BYDDY:82,CEG:86,VST:82,VRT:84,CRDO:75,GLO:62,FN:86,MELI:91,PYPL:76,KLAC:93,FLEX:78,AMD:88,NBIS:68,MRVL:82,CMI:84,CAT:88,EQT:78,HWM:88,ET:78,ONTO:84,SKHY:89,RKLB:67,ETN:92,SNDK:74,HPE:73,IONQ:57,ZTS:88,WDC:76,DELL:80,CSCO:80,DUK:82,ANET:94
@@ -150,6 +151,8 @@ const MARKET_YEAR=new Date().getFullYear();
 const RATINGS_VERSION="2026-07-22";
 const RATINGS_UPDATED=new Date(`${RATINGS_VERSION}T12:00:00`).toLocaleDateString(undefined,{year:"numeric",month:"long",day:"numeric"});
 const RATINGS_METHOD="Steve research ratings — manually maintained";
+const RATINGS_AGE_DAYS=Math.max(0,Math.floor((Date.now()-new Date(`${RATINGS_VERSION}T12:00:00`).getTime())/86400000));
+function ratingsAgeText(){return RATINGS_AGE_DAYS>120?`Ratings are ${RATINGS_AGE_DAYS} days old — review recommended.`:RATINGS_AGE_DAYS>60?`Ratings are ${RATINGS_AGE_DAYS} days old.`:`Ratings reviewed ${RATINGS_UPDATED}.`;}
 
 const $=id=>document.getElementById(id);
 function safeStoredJSON(key,fallback){
@@ -381,6 +384,14 @@ function calculated(x){
  }
  return{...x,price,belowHigh,aboveLow,ytd,vsAvg,range,quality,value,rated,opportunity,oppReasons,oppWarnings,alert:a,hitLow,hitHigh};
 }
+function boardDataConfidence(x){
+ const checks=[Number.isFinite(x.price)||Number.isFinite(x.historyPrice),Number.isFinite(x.dayPct),Number.isFinite(x.yearHigh),Number.isFinite(x.yearLow),Number.isFinite(x.yearAvg),Number.isFinite(x.yearFirst),x.rated];
+ const score=Math.round(checks.filter(Boolean).length/checks.length*100);
+ const newest=Math.max(Number(x.quoteAt)||0,Number(x.extendedAt)||0,Number(x.yearAt)||0);
+ const stale=!newest||Date.now()-newest>24*60*60*1000;
+ const label=stale?"Stale":score>=85?"High":score>=60?"Partial":"Low";
+ return{score,label,stale};
+}
 function label(x){if(!Number.isFinite(x.belowHigh))return"Year range unavailable";const d=Math.abs(x.belowHigh);return d<=3?`Near ${MARKET_YEAR} high`:d<=10?"Small pullback":d<=20?"Moderate pullback":"Deep pullback"}
 function allRows(baseRows){
  const q=$("search").value.trim().toLowerCase();let a=[...(baseRows||watch.map(w=>calculated({...w,...(data[w.symbol]||{})})))];
@@ -406,7 +417,7 @@ function portfolioAction(x,gainPct){
 
 function xrayHref(x){
  const q=new URLSearchParams({ticker:x.symbol});
- const rankedTotal=Object.values(data).map(v=>calculated(v)).filter(v=>Number.isFinite(v.opportunity)).length;
+ const rankedTotal=watch.map(w=>calculated({...w,...(data[w.symbol]||{})})).filter(v=>Number.isFinite(v.opportunity)).length;
  const fields={name:x.name,rank:x.opportunityRank,total:rankedTotal,score:x.opportunity,quality:x.quality,value:x.value,price:x.price,previousClose:x.prev,yearHigh:x.yearHigh,yearLow:x.yearLow,belowHigh:x.belowHigh,aboveLow:x.aboveLow,ytd:x.ytd,range:x.range};
  for(const [k,v] of Object.entries(fields))if(v!==null&&v!==undefined&&v!==""&&(typeof v!=="number"||Number.isFinite(v)))q.set(k,String(v));
  return `x-ray.html?${q.toString()}`;
@@ -501,9 +512,9 @@ function render(){
  <div class="metric"><div class="label">2026 low</div><div class="value">${Number.isFinite(x.yearLow)?"$"+num(x.yearLow):"—"}</div></div>
  <div class="metric"><div class="label">Above low</div><div class="value">${Number.isFinite(x.aboveLow)?num(x.aboveLow)+"%":"—"}</div></div>
  <div class="metric"><div class="label">2026 gain/loss</div><div class="value ${cls(x.ytd)}">${pct(x.ytd)}</div></div>
- <div class="metric"><div class="label">Range position</div><div class="value">${Number.isFinite(x.range)?num(x.range,0)+"%":"—"}</div></div><div class="metric"><div class="label">Opportunity score</div><div class="value ${Number.isFinite(x.opportunity)&&x.opportunity>=72?"pos":Number.isFinite(x.opportunity)&&x.opportunity<48?"neg":""}">${Number.isFinite(x.opportunity)?num(x.opportunity,0)+"/100":"—"}</div></div>
+ <div class="metric"><div class="label">Range position</div><div class="value">${Number.isFinite(x.range)?num(x.range,0)+"%":"—"}</div></div><div class="metric"><div class="label">Opportunity score</div><div class="value ${Number.isFinite(x.opportunity)&&x.opportunity>=72?"pos":Number.isFinite(x.opportunity)&&x.opportunity<48?"neg":""}">${Number.isFinite(x.opportunity)?num(x.opportunity,0)+"/100":"—"}</div></div><div class="metric"><div class="label">Data confidence</div><div class="value ${boardDataConfidence(x).stale?"neg":boardDataConfidence(x).score>=85?"pos":""}">${boardDataConfidence(x).label} • ${boardDataConfidence(x).score}%</div></div>
  </div>
- ${!x.rated?`<div class="oppwhy"><b>Not yet rated:</b> Add quality and value ratings before using this stock in opportunity ranking.</div>`:Number.isFinite(x.opportunity)?`<div class="oppwhy"><b>Why it ranks here:</b> ${x.oppReasons.length?x.oppReasons.slice(0,4).join(" • "):"mixed setup"}${x.oppWarnings.length?`<br><span class="neg">Caution: ${x.oppWarnings.join(" • ")}</span>`:""}<br><span class="name">${RATINGS_METHOD}; reviewed ${RATINGS_UPDATED}.</span></div>`:""}
+ ${!x.rated?`<div class="oppwhy"><b>Not yet rated:</b> Add quality and value ratings before using this stock in opportunity ranking.</div>`:Number.isFinite(x.opportunity)?`<div class="oppwhy"><b>Why it ranks here:</b> ${x.oppReasons.length?x.oppReasons.slice(0,4).join(" • "):"mixed setup"}${x.oppWarnings.length?`<br><span class="neg">Caution: ${x.oppWarnings.join(" • ")}</span>`:""}<br><span class="name">${RATINGS_METHOD}. ${ratingsAgeText()}</span></div>`:""}
  <div class="rangebar"><div class="rangefill" style="width:${Number.isFinite(x.range)?x.range:0}%"></div></div>
  <div class="bottom"><div><span class="tag">${label(x)}${Number.isFinite(x.range)?` • ${num(x.range,0)}% up range`:""}</span><div class="alerttext ${x.hitLow||x.hitHigh?"alert-hit":""}">${alertText(x)}${Number.isFinite(x.quoteAt)?` • Live quote ${new Date(x.quoteAt).toLocaleTimeString()}`:Number.isFinite(x.yearAt)?` • Cached/history ${new Date(x.yearAt).toLocaleDateString()}`:""}</div></div>
  <div class="actions"><button onclick="editHolding('${x.symbol}')">Portfolio</button><button class="chartbtn" onclick="toggleChart('${x.symbol}')">Chart</button><button class="alertbtn" onclick="setAlert('${x.symbol}')">Alert</button><button class="remove" type="button" data-remove-symbol="${x.symbol}">${pendingRemoveSymbol===x.symbol?"Tap again":"Remove"}</button></div></div>
