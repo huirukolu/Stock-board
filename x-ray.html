@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#07090c">
 <meta name="description" content="Steve's Stock X-Ray — valuation, fundamentals, news, analyst ratings and an explained research score.">
-<title>Steve's Stock X-Ray 6.4</title>
+<title>Steve's Stock X-Ray 6.5</title>
 <style>
 :root{
   --bg:#07090c;--panel:#11161d;--panel2:#171e27;--text:#f5f7fa;--muted:#9ba8b7;
@@ -82,7 +82,7 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
 </head>
 <body>
 <header>
-  <div class="headerline"><div><h1>Steve's Stock X-Ray 6.4</h1><div class="sub">Fast decisions with a five-second summary, Board context, score history, price zones and explained scoring</div></div><button id="backBtn">Board</button></div>
+  <div class="headerline"><div><h1>Steve's Stock X-Ray 6.5</h1><div class="sub">Fast decisions with a five-second summary, Board context, score history, price zones and explained scoring</div></div><button id="backBtn">Board</button></div>
 </header>
 <main>
   <div class="searchbar">
@@ -285,8 +285,8 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
   </div>
 
   <details>
-    <summary>What’s new in Version 6.4 <span class="releaseBadge">NEW</span></summary>
-    <div class="note" style="margin-top:10px">Added Yahoo fundamentals time-series fallback • calculates growth, margins, cash flow and balance-sheet ratios when summary feeds omit them • improved analyst and dividend field mapping • retains the 6.1 retry and Board-cache protections.</div>
+    <summary>What’s new in Version 6.5 <span class="releaseBadge">NEW</span></summary>
+    <div class="note" style="margin-top:10px">Fixed missing-score narrative handling so unavailable data is no longer treated like a weak score • preserves Board rank totals correctly when launched from Board 5.5 • retains Yahoo fundamentals fallback and feed protections.</div>
   </details>
 
   <details>
@@ -918,28 +918,28 @@ function verdict(score,confidence){
 }
 function buildNarrative(){
  const d=state.derived,s=state.scores,good=[],bad=[];
- if(s.profitability>=75)good.push("profitability is strong");
- if(s.balance>=75)good.push("the balance sheet looks healthy");
- if(s.growth>=72)good.push("growth is favorable");
- if(s.valuation>=72)good.push("valuation is reasonable by your preferred standards");
+ if(finite(s.profitability)&&s.profitability>=75)good.push("profitability is strong");
+ if(finite(s.balance)&&s.balance>=75)good.push("the balance sheet looks healthy");
+ if(finite(s.growth)&&s.growth>=72)good.push("growth is favorable");
+ if(finite(s.valuation)&&s.valuation>=72)good.push("valuation is reasonable by your preferred standards");
  if(finite(d.belowHigh)&&d.belowHigh<=-10&&d.belowHigh>=-30)good.push("the shares are in a meaningful pullback rather than at the yearly high");
  if(finite(d.pe)&&d.pe>60)bad.push(`the trailing P/E is high at about ${fmt(d.pe,1)}`);
  if(finite(d.revGrowth)&&d.revGrowth<0)bad.push("revenue growth is negative");
  if(finite(d.debtEquity)&&d.debtEquity>160)bad.push("debt is elevated relative to equity");
  if(finite(d.belowHigh)&&d.belowHigh<-40)bad.push("the price decline may represent a breakdown, not merely a bargain");
- if(!good.length)good.push("the available measurements are mixed");
+ if(!good.length)good.push(Object.values(s).filter(finite).length<5?"several key scoring categories are unavailable":"the available measurements are mixed");
  if(!bad.length)bad.push("no major quantitative warning was detected in the available fields");
  return `The X-Ray rates ${state.name} as <b>${state.verdict}</b>. The main positives are that ${good.join(", ")}. The main caution is that ${bad.join(", ")}. This conclusion uses ${Object.values(state.scores).filter(finite).length} of 9 scoring sections, so confidence is ${fmt(state.confidence,0)}%.`;
 }
 function strengthsRisks(){
  const d=state.derived,s=state.scores,strengths=[],risks=[];
- if(s.growth>=70)strengths.push("Healthy growth");if(s.profitability>=70)strengths.push("Strong margins/returns");
- if(s.balance>=70)strengths.push("Solid balance sheet");if(s.cashflow>=70)strengths.push("Positive cash flow");
- if(s.valuation>=70)strengths.push("Acceptable valuation");if(s.analyst>=70)strengths.push("Supportive analyst view");
+ if(finite(s.growth)&&s.growth>=70)strengths.push("Healthy growth");if(finite(s.profitability)&&s.profitability>=70)strengths.push("Strong margins/returns");
+ if(finite(s.balance)&&s.balance>=70)strengths.push("Solid balance sheet");if(finite(s.cashflow)&&s.cashflow>=70)strengths.push("Positive cash flow");
+ if(finite(s.valuation)&&s.valuation>=70)strengths.push("Acceptable valuation");if(finite(s.analyst)&&s.analyst>=70)strengths.push("Supportive analyst view");
  if(finite(d.pe)&&d.pe>50)risks.push("High P/E");if(finite(d.debtEquity)&&d.debtEquity>120)risks.push("Elevated debt");
  if(finite(d.revGrowth)&&d.revGrowth<0)risks.push("Revenue contraction");if(finite(d.epsGrowth)&&d.epsGrowth<0)risks.push("Earnings contraction");
  if(finite(d.beta)&&d.beta>1.5)risks.push("High volatility");if(finite(d.belowHigh)&&d.belowHigh<-35)risks.push("Possible price breakdown");
- if(!strengths.length)strengths.push("No strong signal from available data");if(!risks.length)risks.push("No major quantitative warning found");
+ if(!strengths.length)strengths.push(Object.values(s).filter(finite).length<5?"Insufficient category data":"No strong signal from available data");if(!risks.length)risks.push("No major quantitative warning found");
  return{strengths,risks};
 }
 function newsTone(){
@@ -955,12 +955,12 @@ function newsTone(){
 function bullBearText(){
  const d=state.derived,s=state.scores;
  const bull=[],bear=[];
- if(s.growth>=70)bull.push("Revenue and earnings trends are supportive.");
- if(s.profitability>=70)bull.push("Margins and returns indicate a high-quality business.");
- if(s.balance>=70)bull.push("The balance sheet appears financially resilient.");
- if(s.cashflow>=65)bull.push("Cash generation supports reinvestment and shareholder value.");
- if(s.valuation>=65)bull.push("Valuation is within or near your preferred range.");
- if(s.analyst>=65)bull.push("The current analyst picture is broadly supportive.");
+ if(finite(s.growth)&&s.growth>=70)bull.push("Revenue and earnings trends are supportive.");
+ if(finite(s.profitability)&&s.profitability>=70)bull.push("Margins and returns indicate a high-quality business.");
+ if(finite(s.balance)&&s.balance>=70)bull.push("The balance sheet appears financially resilient.");
+ if(finite(s.cashflow)&&s.cashflow>=65)bull.push("Cash generation supports reinvestment and shareholder value.");
+ if(finite(s.valuation)&&s.valuation>=65)bull.push("Valuation is within or near your preferred range.");
+ if(finite(s.analyst)&&s.analyst>=65)bull.push("The current analyst picture is broadly supportive.");
  if(finite(d.belowHigh)&&d.belowHigh<=-10&&d.belowHigh>=-30)bull.push("The stock is below its yearly high without automatically looking broken.");
 
  if(finite(d.pe)&&d.pe>45)bear.push(`The P/E of about ${fmt(d.pe,1)} leaves less room for disappointment.`);
