@@ -58,7 +58,7 @@ details{margin-top:16px;background:var(--panel);border:1px solid var(--line);bor
 <input id="search" placeholder="Search ticker or company">
 <select id="sort">
 <option value="opportunity" selected>Biggest opportunities</option><option value="dayDesc">Biggest gainers today</option><option value="dayAsc">Biggest losers today</option>
-<option value="dipDesc">Deepest below 2026 high</option><option value="belowAvg">Furthest below 2026 average</option>
+<option value="dipDesc">Deepest below current-year high</option><option value="belowAvg">Furthest below current-year average</option>
 <option value="nearLow">Closest to 2026 low</option><option value="ytdDesc">Best 2026 gain</option>
 <option value="ytdAsc">Worst 2026 result</option><option value="symbol">Alphabetical</option>
 </select>
@@ -146,7 +146,10 @@ VTI:88,TSM:94,QQQM:90,META:93,MU:88,TEL:87,NVDA:95,AVGO:94,GEV:84,APH:91,NVT:80,
 const VALUE={
 VTI:72,TSM:82,QQQM:62,META:78,MU:80,TEL:70,NVDA:55,AVGO:58,GEV:48,APH:47,NVT:66,AMAT:63,SOXQ:60,TTE:86,ALGM:68,LRCX:62,RTX:74,RMBS:58,BYDDY:78,CEG:70,VST:72,VRT:46,CRDO:34,GLO:76,FN:58,MELI:52,PYPL:84,KLAC:56,FLEX:80,AMD:50,NBIS:42,MRVL:50,CMI:76,CAT:61,EQT:84,HWM:48,ET:88,ONTO:62,SKHY:90,RKLB:32,ETN:57,SNDK:55,HPE:82,IONQ:24,ZTS:72,WDC:74,DELL:74,CSCO:82,DUK:78,ANET:43
 };
-const RATINGS_UPDATED=new Date(document.lastModified).toLocaleDateString(undefined,{year:"numeric",month:"long",day:"numeric"});
+const MARKET_YEAR=new Date().getFullYear();
+const RATINGS_VERSION="2026-07-22";
+const RATINGS_UPDATED=new Date(`${RATINGS_VERSION}T12:00:00`).toLocaleDateString(undefined,{year:"numeric",month:"long",day:"numeric"});
+const RATINGS_METHOD="Steve research ratings — manually maintained";
 
 const $=id=>document.getElementById(id);
 function safeStoredJSON(key,fallback){
@@ -156,8 +159,10 @@ function safeStoredJSON(key,fallback){
   return fallback;
  }
 }
-let watch=safeStoredJSON("steveWatchV3",null)||ORIGINAL.map(x=>({symbol:x[0],name:x[1]}));
-if(!Array.isArray(watch))watch=ORIGINAL.map(x=>({symbol:x[0],name:x[1]}));
+const savedWatch=safeStoredJSON("steveWatchV3",null);
+let usingDefaultWatch=!Array.isArray(savedWatch);
+let watch=usingDefaultWatch?ORIGINAL.map(x=>({symbol:x[0],name:x[1]})):savedWatch;
+if(!Array.isArray(watch)){usingDefaultWatch=true;watch=ORIGINAL.map(x=>({symbol:x[0],name:x[1]}));}
 watch=watch.map(x=>({symbol:String(x?.symbol||"").trim().toUpperCase(),name:String(x?.name||x?.symbol||"").trim()})).filter(x=>x.symbol);
 let data=safeStoredJSON("steveDataV5",{});if(!data||typeof data!=="object"||Array.isArray(data))data={};
 let alerts=safeStoredJSON("steveAlertsV2",{});if(!alerts||typeof alerts!=="object"||Array.isArray(alerts))alerts={};
@@ -376,7 +381,7 @@ function calculated(x){
  }
  return{...x,price,belowHigh,aboveLow,ytd,vsAvg,range,quality,value,rated,opportunity,oppReasons,oppWarnings,alert:a,hitLow,hitHigh};
 }
-function label(x){if(!Number.isFinite(x.belowHigh))return"Year range unavailable";const d=Math.abs(x.belowHigh);return d<=3?"Near 2026 high":d<=10?"Small pullback":d<=20?"Moderate pullback":"Deep pullback"}
+function label(x){if(!Number.isFinite(x.belowHigh))return"Year range unavailable";const d=Math.abs(x.belowHigh);return d<=3?`Near ${MARKET_YEAR} high`:d<=10?"Small pullback":d<=20?"Moderate pullback":"Deep pullback"}
 function allRows(baseRows){
  const q=$("search").value.trim().toLowerCase();let a=[...(baseRows||watch.map(w=>calculated({...w,...(data[w.symbol]||{})})))];
  if(q)a=a.filter(x=>x.symbol.toLowerCase().includes(q)||x.name.toLowerCase().includes(q));
@@ -401,7 +406,8 @@ function portfolioAction(x,gainPct){
 
 function xrayHref(x){
  const q=new URLSearchParams({ticker:x.symbol});
- const fields={name:x.name,rank:x.opportunityRank,total:watch.length,score:x.opportunity,quality:x.quality,value:x.value,price:x.price,previousClose:x.prev,yearHigh:x.yearHigh,yearLow:x.yearLow,belowHigh:x.belowHigh,aboveLow:x.aboveLow,ytd:x.ytd,range:x.range};
+ const rankedTotal=Object.values(data).map(v=>calculated(v)).filter(v=>Number.isFinite(v.opportunity)).length;
+ const fields={name:x.name,rank:x.opportunityRank,total:rankedTotal,score:x.opportunity,quality:x.quality,value:x.value,price:x.price,previousClose:x.prev,yearHigh:x.yearHigh,yearLow:x.yearLow,belowHigh:x.belowHigh,aboveLow:x.aboveLow,ytd:x.ytd,range:x.range};
  for(const [k,v] of Object.entries(fields))if(v!==null&&v!==undefined&&v!==""&&(typeof v!=="number"||Number.isFinite(v)))q.set(k,String(v));
  return `x-ray.html?${q.toString()}`;
 }
@@ -410,22 +416,26 @@ function renderPortfolio(calculatedAll){
  let totalValue=0,totalCost=0;
  const enriched=rows.map(x=>{
    const h=holdings[x.symbol],shares=Number(h.shares)||0,cost=Number(h.cost)||0;
-   const positionValue=Number.isFinite(x.price)?shares*x.price:0,basis=shares*cost,gain=positionValue-basis,gainPct=basis>0?gain/basis*100:null;
-   totalValue+=positionValue;totalCost+=basis;
-   return{...x,shares,cost,positionValue,basis,gain,gainPct};
- }).sort((a,b)=>b.positionValue-a.positionValue);
+   const usablePrice=Number.isFinite(x.price)?x.price:(Number.isFinite(x.historyPrice)?x.historyPrice:null);
+   const hasPrice=Number.isFinite(usablePrice),positionValue=hasPrice?shares*usablePrice:null,basis=shares*cost;
+   const gain=hasPrice?positionValue-basis:null,gainPct=hasPrice&&basis>0?gain/basis*100:null;
+   if(hasPrice){totalValue+=positionValue;totalCost+=basis;}
+   return{...x,price:usablePrice,shares,cost,hasPrice,positionValue,basis,gain,gainPct};
+ }).sort((a,b)=>(b.positionValue??-1)-(a.positionValue??-1));
+ const missingPrices=enriched.filter(x=>!x.hasPrice).length;
  const totalGain=totalValue-totalCost;
  $("portfolioValue").textContent="$"+num(totalValue);
  $("portfolioCost").textContent="$"+num(totalCost);
  $("portfolioGain").textContent=`${totalGain>=0?"+":"-"}$${num(Math.abs(totalGain))}${totalCost>0?` (${pct(totalGain/totalCost*100)})`:""}`;
  $("portfolioGain").className="big "+cls(totalGain);
  $("portfolioCount").textContent=String(enriched.length);
- $("portfolioList").innerHTML=enriched.length?enriched.map(x=>{
+ const priceWarning=missingPrices?`<div class="portfolioEmpty" style="padding:12px;margin-bottom:9px">${missingPrices} holding${missingPrices===1?" was":"s were"} excluded from market-value and gain/loss totals because no usable price was available.</div>`:"";
+ $("portfolioList").innerHTML=priceWarning+(enriched.length?enriched.map(x=>{
    const weight=totalValue>0?x.positionValue/totalValue*100:null;
-   return `<article class="holding"><div class="holdingTop"><div><div class="symbol"><a class="xray-link" data-xray-symbol="${x.symbol}" href="${xrayHref(x)}">${x.symbol}</a></div><div class="company">${x.name}</div></div><div><div class="price">$${num(x.positionValue)}</div><div class="day ${cls(x.gain)}">${x.gain>=0?"+":"-"}$${num(Math.abs(x.gain))} • ${pct(x.gainPct)}</div></div></div>
-   <div class="holdingGrid"><div class="metric"><div class="label">Shares</div><div class="value">${num(x.shares,4)}</div></div><div class="metric"><div class="label">Average cost</div><div class="value">$${num(x.cost)}</div></div><div class="metric"><div class="label">Current price</div><div class="value">${Number.isFinite(x.price)?"$"+num(x.price):"—"}</div></div><div class="metric"><div class="label">Portfolio weight</div><div class="value">${Number.isFinite(weight)?num(weight,1)+"%":"—"}</div></div><div class="metric"><div class="label">Board opportunity</div><div class="value">${Number.isFinite(x.opportunity)?num(x.opportunity,0)+"/100":"—"}</div></div><div class="metric"><div class="label">Quality</div><div class="value">${Number.isFinite(x.quality)?num(x.quality,0):"—"}</div></div><div class="metric"><div class="label">Value</div><div class="value">${Number.isFinite(x.value)?num(x.value,0):"—"}</div></div><div class="metric"><div class="label">Below 2026 high</div><div class="value">${Number.isFinite(x.belowHigh)?num(Math.abs(x.belowHigh),1)+"%":"—"}</div></div></div>
+   return `<article class="holding"><div class="holdingTop"><div><div class="symbol"><a class="xray-link" data-xray-symbol="${x.symbol}" href="${xrayHref(x)}">${x.symbol}</a></div><div class="company">${x.name}</div></div><div><div class="price">${x.hasPrice?"$"+num(x.positionValue):"Price unavailable"}</div><div class="day ${x.hasPrice?cls(x.gain):"flat"}">${x.hasPrice?`${x.gain>=0?"+":"-"}$${num(Math.abs(x.gain))} • ${pct(x.gainPct)}`:"Excluded from totals"}</div></div></div>
+   <div class="holdingGrid"><div class="metric"><div class="label">Shares</div><div class="value">${num(x.shares,4)}</div></div><div class="metric"><div class="label">Average cost</div><div class="value">$${num(x.cost)}</div></div><div class="metric"><div class="label">Current price</div><div class="value">${Number.isFinite(x.price)?"$"+num(x.price):"—"}</div></div><div class="metric"><div class="label">Portfolio weight</div><div class="value">${Number.isFinite(weight)?num(weight,1)+"%":"—"}</div></div><div class="metric"><div class="label">Board opportunity</div><div class="value">${Number.isFinite(x.opportunity)?num(x.opportunity,0)+"/100":"—"}</div></div><div class="metric"><div class="label">Quality</div><div class="value">${Number.isFinite(x.quality)?num(x.quality,0):"—"}</div></div><div class="metric"><div class="label">Value</div><div class="value">${Number.isFinite(x.value)?num(x.value,0):"—"}</div></div><div class="metric"><div class="label">Below ${MARKET_YEAR} high</div><div class="value">${Number.isFinite(x.belowHigh)?num(Math.abs(x.belowHigh),1)+"%":"—"}</div></div></div>
    <div class="holdingAction"><b>Portfolio guide:</b> ${portfolioAction(x,x.gainPct)}</div><div class="actions" style="margin-top:9px"><button onclick="editHolding('${x.symbol}')">Edit holding</button><button class="remove" onclick="removeHolding('${x.symbol}')">Remove holding</button></div></article>`;
- }).join(""):'<div class="portfolioEmpty">No holdings entered yet. Tap “Add holding,” or use the Portfolio button on any stock card.</div>';
+ }).join(""):'<div class="portfolioEmpty">No holdings entered yet. Tap “Add holding,” or use the Portfolio button on any stock card.</div>');
 }
 window.editHolding=s=>{
  const current=holdings[s]||{};
@@ -486,14 +496,14 @@ function render(){
  <div class="metrics">
  <div class="metric"><div class="label">2026 average</div><div class="value">${Number.isFinite(x.yearAvg)?"$"+num(x.yearAvg):"—"}</div></div>
  <div class="metric"><div class="label">Vs. average</div><div class="value ${cls(x.vsAvg)}">${pct(x.vsAvg)}</div></div>
- <div class="metric"><div class="label">2026 high</div><div class="value">${Number.isFinite(x.yearHigh)?"$"+num(x.yearHigh):"—"}</div></div>
+ <div class="metric"><div class="label">${MARKET_YEAR} high</div><div class="value">${Number.isFinite(x.yearHigh)?"$"+num(x.yearHigh):"—"}</div></div>
  <div class="metric"><div class="label">Below high</div><div class="value neg">${Number.isFinite(x.belowHigh)?num(Math.abs(x.belowHigh))+"%":"—"}</div></div>
  <div class="metric"><div class="label">2026 low</div><div class="value">${Number.isFinite(x.yearLow)?"$"+num(x.yearLow):"—"}</div></div>
  <div class="metric"><div class="label">Above low</div><div class="value">${Number.isFinite(x.aboveLow)?num(x.aboveLow)+"%":"—"}</div></div>
  <div class="metric"><div class="label">2026 gain/loss</div><div class="value ${cls(x.ytd)}">${pct(x.ytd)}</div></div>
  <div class="metric"><div class="label">Range position</div><div class="value">${Number.isFinite(x.range)?num(x.range,0)+"%":"—"}</div></div><div class="metric"><div class="label">Opportunity score</div><div class="value ${Number.isFinite(x.opportunity)&&x.opportunity>=72?"pos":Number.isFinite(x.opportunity)&&x.opportunity<48?"neg":""}">${Number.isFinite(x.opportunity)?num(x.opportunity,0)+"/100":"—"}</div></div>
  </div>
- ${!x.rated?`<div class="oppwhy"><b>Not yet rated:</b> Add quality and value ratings before using this stock in opportunity ranking.</div>`:Number.isFinite(x.opportunity)?`<div class="oppwhy"><b>Why it ranks here:</b> ${x.oppReasons.length?x.oppReasons.slice(0,4).join(" • "):"mixed setup"}${x.oppWarnings.length?`<br><span class="neg">Caution: ${x.oppWarnings.join(" • ")}</span>`:""}<br><span class="name">Quality/value ratings updated ${RATINGS_UPDATED}.</span></div>`:""}
+ ${!x.rated?`<div class="oppwhy"><b>Not yet rated:</b> Add quality and value ratings before using this stock in opportunity ranking.</div>`:Number.isFinite(x.opportunity)?`<div class="oppwhy"><b>Why it ranks here:</b> ${x.oppReasons.length?x.oppReasons.slice(0,4).join(" • "):"mixed setup"}${x.oppWarnings.length?`<br><span class="neg">Caution: ${x.oppWarnings.join(" • ")}</span>`:""}<br><span class="name">${RATINGS_METHOD}; reviewed ${RATINGS_UPDATED}.</span></div>`:""}
  <div class="rangebar"><div class="rangefill" style="width:${Number.isFinite(x.range)?x.range:0}%"></div></div>
  <div class="bottom"><div><span class="tag">${label(x)}${Number.isFinite(x.range)?` • ${num(x.range,0)}% up range`:""}</span><div class="alerttext ${x.hitLow||x.hitHigh?"alert-hit":""}">${alertText(x)}${Number.isFinite(x.quoteAt)?` • Live quote ${new Date(x.quoteAt).toLocaleTimeString()}`:Number.isFinite(x.yearAt)?` • Cached/history ${new Date(x.yearAt).toLocaleDateString()}`:""}</div></div>
  <div class="actions"><button onclick="editHolding('${x.symbol}')">Portfolio</button><button class="chartbtn" onclick="toggleChart('${x.symbol}')">Chart</button><button class="alertbtn" onclick="setAlert('${x.symbol}')">Alert</button><button class="remove" type="button" data-remove-symbol="${x.symbol}">${pendingRemoveSymbol===x.symbol?"Tap again":"Remove"}</button></div></div>
@@ -700,7 +710,21 @@ $("reset").onclick=()=>{if(confirm("Restore the base 28-stock list?")){
  setTimeout(()=>refresh({force:false}),1500);
 }}
 function createAutoBackup(){const backup={version:2,exportedAt:new Date().toISOString(),watchlist:watch,alerts,openCharts,xrayNotes:typeof collectXrayNotes==="function"?collectXrayNotes():{},holdings};try{localStorage.setItem("steveAutoBackup",JSON.stringify(backup))}catch(e){}}
-function checkAutoBackup(){const rawBackup=localStorage.getItem("steveAutoBackup");if(!rawBackup||watch.length)return;try{const b=JSON.parse(rawBackup);if(Array.isArray(b.watchlist)&&b.watchlist.length){watch=b.watchlist;alerts=b.alerts&&typeof b.alerts==="object"?b.alerts:{};openCharts=b.openCharts&&typeof b.openCharts==="object"?b.openCharts:{};if(typeof restoreXrayNotes==="function")restoreXrayNotes(b.xrayNotes);holdings=b.holdings&&typeof b.holdings==="object"?b.holdings:{};save();showToast("Auto-backup restored","info")}}catch(e){}}
+function checkAutoBackup(){
+ const rawBackup=localStorage.getItem("steveAutoBackup");
+ if(!rawBackup||!usingDefaultWatch)return;
+ try{
+  const b=JSON.parse(rawBackup);
+  if(Array.isArray(b.watchlist)&&b.watchlist.length){
+   watch=b.watchlist;usingDefaultWatch=false;
+   alerts=b.alerts&&typeof b.alerts==="object"?b.alerts:{};
+   openCharts=b.openCharts&&typeof b.openCharts==="object"?b.openCharts:{};
+   if(typeof restoreXrayNotes==="function")restoreXrayNotes(b.xrayNotes);
+   holdings=b.holdings&&typeof b.holdings==="object"?b.holdings:{};
+   save();showToast("Auto-backup restored","info");
+  }
+ }catch(e){console.warn("Could not restore auto-backup",e)}
+}
 function startAuto(){if(autoTimer)clearInterval(autoTimer);if(backupTimer)clearInterval(backupTimer);autoTimer=setInterval(()=>{if(!document.hidden)refresh()},AUTO_REFRESH_MS);backupTimer=setInterval(createAutoBackup,3600000)}
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)refresh({force:false})});
 let resizeTimer;
