@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#07090c">
 <meta name="description" content="Steve's Stock X-Ray — valuation, fundamentals, news, analyst ratings and an explained research score.">
-<title>Steve's Stock X-Ray 6.5</title>
+<title>Steve's Stock X-Ray 6.6</title>
 <style>
 :root{
   --bg:#07090c;--panel:#11161d;--panel2:#171e27;--text:#f5f7fa;--muted:#9ba8b7;
@@ -82,7 +82,7 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
 </head>
 <body>
 <header>
-  <div class="headerline"><div><h1>Steve's Stock X-Ray 6.5</h1><div class="sub">Fast decisions with a five-second summary, Board context, score history, price zones and explained scoring</div></div><button id="backBtn">Board</button></div>
+  <div class="headerline"><div><h1>Steve's Stock X-Ray 6.6</h1><div class="sub">Fast decisions with a five-second summary, Board context, score history, price zones and explained scoring</div></div><button id="backBtn">Board</button></div>
 </header>
 <main>
   <div class="searchbar">
@@ -285,8 +285,8 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
   </div>
 
   <details>
-    <summary>What’s new in Version 6.5 <span class="releaseBadge">NEW</span></summary>
-    <div class="note" style="margin-top:10px">Fixed missing-score narrative handling so unavailable data is no longer treated like a weak score • preserves Board rank totals correctly when launched from Board 5.5 • retains Yahoo fundamentals fallback and feed protections.</div>
+    <summary>What’s new in Version 6.6 <span class="releaseBadge">NEW</span></summary>
+    <div class="note" style="margin-top:10px">Rejects implausible valuation multiples and stale split-adjusted EPS • prevents absurd P/E values from creating false $5 buy zones • withholds valuation and fair-value calls when dependable inputs are missing • keeps missing data separate from weak fundamentals.</div>
   </details>
 
   <details>
@@ -367,13 +367,20 @@ function verdictReason(d){
  return `Main positive: ${pos}. Main risk: ${risk}.`;
 }
 function fairValueText(d){
- const candidates=[d.target,d.roughValue].filter(v=>finite(v)&&v>0);
- if(!candidates.length) return "Not available";
- const mid=candidates.reduce((a,b)=>a+b,0)/candidates.length;
+ const candidates=[d.target,d.roughValue,d.fairEstimate].filter(v=>plausibleFairValue(v,d.price));
+ if(!candidates.length) return "Not available — valuation inputs unreliable";
+ const mid=median(candidates);
  return `${money(mid*0.9)} – ${money(mid*1.1)}`;
 }
 
 function validPositive(v){return finite(v)&&Number(v)>0}
+function plausibleMultiple(v,max=250){return finite(v)&&Number(v)>0&&Number(v)<=max}
+function median(vals){const a=vals.filter(finite).map(Number).sort((x,y)=>x-y);if(!a.length)return null;const m=Math.floor(a.length/2);return a.length%2?a[m]:(a[m-1]+a[m])/2}
+function plausibleFairValue(v,price){
+ if(!validPositive(v))return false;
+ if(!validPositive(price))return true;
+ return Number(v)>=Number(price)*.25&&Number(v)<=Number(price)*4;
+}
 
 function enrichProfile(p){
  const details={
@@ -430,16 +437,15 @@ function buyBelowPrice(d){
  if(!validPositive(d.price))return null;
  const profile=state.industry||companyProfile(state.symbol,state.name);
  const candidates=[];
- if(validPositive(d.target))candidates.push(d.target*.82);
- if(validPositive(d.roughValue))candidates.push(d.roughValue*.85);
- if(finite(d.pe)&&d.pe>0){
+ if(plausibleFairValue(d.target,d.price))candidates.push(d.target*.82);
+ if(plausibleFairValue(d.roughValue,d.price))candidates.push(d.roughValue*.85);
+ if(plausibleMultiple(d.pe,250)){
    const targetPE=Math.min(40,profile.preferredPE||30);
-   candidates.push(d.price*Math.min(.92,targetPE/d.pe));
+   const peBased=d.price*Math.min(.92,targetPE/d.pe);
+   if(plausibleFairValue(peBased,d.price))candidates.push(peBased);
  }
- // Always demand a real margin of safety, never merely echo the current quote.
- candidates.push(d.price*.92);
- const usable=candidates.filter(validPositive);
- return usable.length?Math.min(...usable):null;
+ const usable=candidates.filter(v=>plausibleFairValue(v,d.price));
+ return usable.length?median(usable):null;
 }
 function aiExposure(symbol,name){return companyProfile(symbol,name)}
 function industryPeScore(pe,profile){
@@ -805,9 +811,17 @@ function compute(){
  const q=state.quote,m=state.metrics,s=state.summary,y=state.yahooFundamentals||{};
  const yv=type=>yahooSeriesLatest(y,type),yg=type=>yahooSeriesGrowth(y,type);
  const price=first(q.c,raw(s.price?.regularMarketPrice));
- const pe=first(m.peTTM,raw(s.summaryDetail?.trailingPE),raw(s.defaultKeyStatistics?.trailingPE),yv("trailingPeRatio"));
- const fpe=first(m.forwardPE,raw(s.summaryDetail?.forwardPE),raw(s.defaultKeyStatistics?.forwardPE),yv("forwardPeRatio"));
+ const rawPeCandidates=[m.peTTM,raw(s.summaryDetail?.trailingPE),raw(s.defaultKeyStatistics?.trailingPE),yv("trailingPeRatio")].filter(finite).map(Number);
+ const rawFpeCandidates=[m.forwardPE,raw(s.summaryDetail?.forwardPE),raw(s.defaultKeyStatistics?.forwardPE),yv("forwardPeRatio")].filter(finite).map(Number);
  const eps=first(m.epsTTM,raw(s.defaultKeyStatistics?.trailingEps),yv("trailingEps"));
+ const derivedPe=validPositive(price)&&validPositive(eps)?price/eps:null;
+ const peCandidates=[...rawPeCandidates,derivedPe].filter(v=>plausibleMultiple(v,250));
+ const fpeCandidates=rawFpeCandidates.filter(v=>plausibleMultiple(v,250));
+ const pe=median(peCandidates);
+ const fpe=median(fpeCandidates);
+ const valuationWarning=rawPeCandidates.some(v=>v>250)||plausibleMultiple(derivedPe,5000)&&derivedPe>250
+   ? "Trailing P/E was withheld because the feed returned an implausible value, often caused by stale or split-adjusted EPS."
+   : "";
  const ps=first(m.psTTM,raw(s.summaryDetail?.priceToSalesTrailing12Months),yv("trailingPriceToSales"));
  const pb=first(m.pbAnnual,raw(s.defaultKeyStatistics?.priceToBook),yv("quarterlyPriceToBook"));
  const peg=first(m.pegRatio,raw(s.defaultKeyStatistics?.pegRatio),yv("trailingPegRatio"));
@@ -837,7 +851,15 @@ function compute(){
  const aboveLow=finite(price)&&finite(low52)?(price/low52-1)*100:null;
 
  state.industry=companyProfile(state.symbol,state.name);
- const valuation=average([industryPeScore(pe,state.industry),industryPeScore(fpe,state.industry),scoreLinear(ps,12,2),scoreLinear(pb,12,2),scoreLinear(peg,3.5,.8)]);
+ const valuationInputs=[
+   industryPeScore(pe,state.industry),
+   industryPeScore(fpe,state.industry),
+   plausibleMultiple(ps,100)?scoreLinear(ps,12,2):null,
+   plausibleMultiple(pb,100)?scoreLinear(pb,12,2):null,
+   plausibleMultiple(peg,20)?scoreLinear(peg,3.5,.8):null
+ ];
+ const valuation=average(valuationInputs);
+ const valuationEvidence=valuationInputs.filter(finite).length;
  const growth=average([scoreLinear(revGrowth,-5,25),scoreLinear(epsGrowth,-10,30)]);
  const profitability=average([scoreLinear(grossMargin,15,65),scoreLinear(operatingMargin,5,35),scoreLinear(netMargin,3,25),scoreLinear(roe,5,30)]);
  const balance=average([scoreLinear(currentRatio,.7,2.2),debtScore(debtEquity),finite(cash)&&finite(debt)?scoreLinear(cash/debt,.15,1.25):null]);
@@ -870,7 +892,7 @@ function compute(){
    finite(state.boardData?.belowHigh)&&Number(state.boardData.belowHigh)<-40?30:75
  ]);
  const scores={
-  valuation:finite(valuation)?valuation:bv,
+  valuation:finite(valuation)&&valuationEvidence>=1?valuation:(!valuationWarning?bv:null),
   growth,
   profitability:finite(profitability)?profitability:bq,
   balance:finite(balance)?balance:(finite(bq)?clamp(bq-5):null),
@@ -896,11 +918,12 @@ function compute(){
  const dispersion=scoreSpread.length?Math.max(...scoreSpread)-Math.min(...scoreSpread):100;
  const investmentConfidence=clamp((finite(overall)?Math.abs(overall-50)*1.25:0)+(100-dispersion)*.35);
  state.scores=scores;state.confidence=dataConfidence;state.dataConfidence=dataConfidence;state.investmentConfidence=investmentConfidence;state.overall=overall;
- const roughValue=finite(eps)&&eps>0?eps*(state.industry?.preferredPE||28):null;
- const fairCandidates=[target,roughValue].filter(validPositive);
- const fairEstimate=fairCandidates.length?fairCandidates.reduce((a,b)=>a+b,0)/fairCandidates.length:null;
+ const roughValueCandidate=finite(eps)&&eps>0?eps*(state.industry?.preferredPE||28):null;
+ const roughValue=plausibleFairValue(roughValueCandidate,price)&&plausibleMultiple(derivedPe,250)?roughValueCandidate:null;
+ const fairCandidates=[target,roughValue].filter(v=>plausibleFairValue(v,price));
+ const fairEstimate=fairCandidates.length?median(fairCandidates):null;
  const marginOfSafety=finite(fairEstimate)&&finite(price)?(fairEstimate/price-1)*100:null;
- state.derived={price,pe,fpe,eps,ps,pb,peg,revGrowth,epsGrowth,grossMargin,operatingMargin,netMargin,roe,currentRatio,debtEquity,fcf,cash,debt,ebitda,roic,ebitdaMargin,target,analystUpside,beta,high52,low52,belowHigh,aboveLow,dividendYield,payoutRatio,roughValue,fairEstimate,marginOfSafety};
+ state.derived={price,pe,fpe,eps,ps,pb,peg,revGrowth,epsGrowth,grossMargin,operatingMargin,netMargin,roe,currentRatio,debtEquity,fcf,cash,debt,ebitda,roic,ebitdaMargin,target,analystUpside,beta,high52,low52,belowHigh,aboveLow,dividendYield,payoutRatio,roughValue,fairEstimate,marginOfSafety,valuationWarning,valuationEvidence,rawPeCandidates};
  state.verdict=verdict(overall,dataConfidence);
 }
 function recommendationScore(){
@@ -1092,9 +1115,9 @@ function decisionZones(){
  const d=state.derived;
  // Price-zone calls require both dependable data and real valuation inputs.
  if(state.dataConfidence<50 || !validPositive(d.price))return null;
- if(!validPositive(d.target) && !validPositive(d.roughValue) && !finite(d.pe))return null;
+ if(!plausibleFairValue(d.target,d.price) && !plausibleFairValue(d.roughValue,d.price) && !plausibleMultiple(d.pe,250))return null;
  const buy=buyBelowPrice(d);
- const fairCandidates=[d.target,d.roughValue,d.fairEstimate].filter(validPositive);
+ const fairCandidates=[d.target,d.roughValue,d.fairEstimate].filter(v=>plausibleFairValue(v,d.price));
  let fair=fairCandidates.length?fairCandidates.reduce((a,b)=>a+b,0)/fairCandidates.length:null;
  if(!validPositive(fair))fair=validPositive(buy)?buy/0.88:d.price;
  const goodLow=validPositive(buy)?buy:fair*.82;
@@ -1260,7 +1283,7 @@ function render(){
  $("scoreRing").style.setProperty("--ringColor",state.dataConfidence<50?"var(--muted)":ringColor(state.overall));
  $("explain").innerHTML=buildNarrative();
  const pills=[];
- if(finite(d.pe))pills.push(`P/E ${fmt(d.pe,1)}`);if(finite(d.revGrowth))pills.push(`Revenue growth ${pct(d.revGrowth)}`);
+ if(finite(d.pe))pills.push(`P/E ${fmt(d.pe,1)}`);else if(d.valuationWarning)pills.push("P/E withheld — feed anomaly");if(finite(d.revGrowth))pills.push(`Revenue growth ${pct(d.revGrowth)}`);
  if(finite(d.belowHigh))pills.push(`${fmt(Math.abs(d.belowHigh),1)}% below 52-week high`);if(finite(d.analystUpside))pills.push(`Analyst upside ${pct(d.analystUpside)}`);
  $("pills").innerHTML=pills.map(x=>`<span class="pill">${safe(x)}</span>`).join("");
  renderBoardContext();
@@ -1368,6 +1391,7 @@ function render(){
  $("valuation").innerHTML=[
    metric("Trailing P/E",fmt(d.pe,1)),metric("Forward P/E",fmt(d.fpe,1)),metric("Price / sales",fmt(d.ps,1)),metric("Price / book",fmt(d.pb,1)),
    metric("PEG ratio",fmt(d.peg,2)),
+  metric("Valuation data",d.valuationWarning||"Passed sanity checks",d.valuationWarning?"warning":"tagGood"),
    metric("EBITDA",displayCompactMoney(d.ebitda)),
    metric("EBITDA margin",displayPct(d.ebitdaMargin)),metric("Fair-value estimate",displayMoney(d.fairEstimate)),metric("Margin of safety",finite(d.marginOfSafety)?pct(d.marginOfSafety):"Not available"),metric("52-week high",displayMoney(d.high52)),metric("Below high",finite(d.belowHigh)?fmt(Math.abs(d.belowHigh),1)+"%":"—"),metric("Above low",finite(d.aboveLow)?fmt(d.aboveLow,1)+"%":"—")
  ].join("");
