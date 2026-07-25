@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#07090c">
 <meta name="description" content="Steve's Stock X-Ray — valuation, fundamentals, news, analyst ratings and an explained research score.">
-<title>Steve's Stock X-Ray 6.6</title>
+<title>Steve's Stock X-Ray 6.7</title>
 <style>
 :root{
   --bg:#07090c;--panel:#11161d;--panel2:#171e27;--text:#f5f7fa;--muted:#9ba8b7;
@@ -34,7 +34,7 @@ button{font-weight:800;cursor:pointer;min-height:44px}.primary{background:#173b6
 
 .quickDecision{border:2px solid #3d6791;background:linear-gradient(180deg,#17283b,#0e1824);border-radius:16px;padding:14px}
 .quickTop{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.quickVerdict{font-size:25px;font-weight:950;line-height:1.05}.quickZone{font-size:12px;font-weight:900;padding:7px 10px;border:1px solid var(--line);border-radius:99px;white-space:nowrap}
-.quickGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:12px}.quickTile{background:rgba(255,255,255,.035);border:1px solid var(--line);border-radius:11px;padding:10px}.quickTile strong{display:block;font-size:20px;margin-top:4px}.quickWhy{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);line-height:1.45}.quickHistory{margin-top:8px;color:var(--muted);font-size:12px}
+.quickGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:12px}.quickTile{background:rgba(255,255,255,.035);border:1px solid var(--line);border-radius:11px;padding:10px}.quickTile strong{display:block;font-size:20px;margin-top:4px}.quickWhy{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);line-height:1.45}.quickEntry{margin-top:10px;padding:10px 12px;border:1px solid #36506b;border-radius:11px;background:rgba(103,173,255,.07);font-size:14px;line-height:1.4}.quickEntry b{color:var(--blue)}.quickHistory{margin-top:8px;color:var(--muted);font-size:12px}
 @media(min-width:700px){.quickGrid{grid-template-columns:repeat(4,1fr)}}
 .decisionBox{border:2px solid #34506d;background:linear-gradient(180deg,#142131,#101821);border-radius:15px;padding:14px}
 .boardContext{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;background:#0d151f;border:1px solid #304158;border-radius:13px;padding:11px 12px}
@@ -82,7 +82,7 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
 </head>
 <body>
 <header>
-  <div class="headerline"><div><h1>Steve's Stock X-Ray 6.6</h1><div class="sub">Fast decisions with a five-second summary, Board context, score history, price zones and explained scoring</div></div><button id="backBtn">Board</button></div>
+  <div class="headerline"><div><h1>Steve's Stock X-Ray 6.7</h1><div class="sub">Fast decisions with a five-second summary, Board context, score history, price zones and explained scoring</div></div><button id="backBtn">Board</button></div>
 </header>
 <main>
   <div class="searchbar">
@@ -105,11 +105,12 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
       <div class="quickTop"><div><div class="label">Quick decision</div><div id="quickVerdict" class="quickVerdict">Insufficient data</div><div id="quickSub" class="confidence" style="margin-top:5px"></div></div><div id="quickZone" class="quickZone">WAIT</div></div>
       <div id="quickGrid" class="quickGrid"></div>
       <div id="quickWhy" class="quickWhy"></div>
+      <div id="quickEntry" class="quickEntry"></div>
       <div id="quickHistory" class="quickHistory"></div>
     </div>
     <div id="boardContext" class="boardContext" hidden>
       <div><div class="label">Stock Board context</div><div id="boardRank" class="boardRank">Rank unavailable</div><div id="boardMeta" class="boardMeta"></div></div>
-      <div class="boardBadge"><span class="label">Board score</span><b id="boardScore">—</b></div>
+      <div class="boardBadge"><span class="label">Board score /100</span><b id="boardScore">—</b></div>
     </div>
     <div class="verdictRow" style="padding:10px 0 2px">
       <div>
@@ -285,8 +286,8 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
   </div>
 
   <details>
-    <summary>What’s new in Version 6.6 <span class="releaseBadge">NEW</span></summary>
-    <div class="note" style="margin-top:10px">Rejects implausible valuation multiples and stale split-adjusted EPS • prevents absurd P/E values from creating false $5 buy zones • withholds valuation and fair-value calls when dependable inputs are missing • keeps missing data separate from weak fundamentals.</div>
+    <summary>What’s new in Version 6.7 <span class="releaseBadge">NEW</span></summary>
+    <div class="note" style="margin-top:10px">Clarifies Board Rank and Board Score /100 • shows approximate list standing • adds a visible buy-below price and fair-value area to the five-second summary • retains the valuation safeguards from Version 6.6.</div>
   </details>
 
   <details>
@@ -1180,10 +1181,12 @@ function renderBoardContext(){
    $("boardMeta").textContent="Open this stock from Steve's Board to show its rank and Board score here. Nothing is wrong with the X-Ray.";
    return;
  }
- $("boardRank").textContent=finite(b.rank)?`#${fmt(b.rank,0)}${finite(b.total)?` of ${fmt(b.total,0)}`:""}`:"Board Rank: Not Available";
- $("boardScore").textContent=finite(b.score)?fmt(b.score,0):"—";
+ $("boardRank").textContent=finite(b.rank)?`Board Rank: ${fmt(b.rank,0)} of ${finite(b.total)?fmt(b.total,0):"—"}`:"Board Rank: Not Available";
+ $("boardScore").textContent=finite(b.score)?`${fmt(b.score,0)}`:"—";
  const diff=finite(b.score)&&finite(state.overall)?state.overall-b.score:null;
- $("boardMeta").textContent=finite(diff)?`Deep X-Ray is ${diff>=0?"+":""}${fmt(diff,0)} points versus the Board screen. The Board finds candidates; the X-Ray verifies them.`:"The Board finds candidates quickly; the X-Ray performs the deeper verification.";
+ const percentile=finite(b.rank)&&finite(b.total)&&b.total>1?Math.round((1-(b.rank-1)/(b.total-1))*100):null;
+ const rankNote=finite(percentile)?`Board standing: approximately top ${Math.max(1,percentile)}% of this list. `:"";
+ $("boardMeta").textContent=finite(diff)?`${rankNote}Deep X-Ray is ${diff>=0?"+":""}${fmt(diff,0)} points versus the Board score. The Board finds candidates; the X-Ray verifies them.`:`${rankNote}The Board finds candidates quickly; the X-Ray performs the deeper verification.`;
 }
 function decisionCockpitHTML(zones){
  const d=state.derived,q=qualityScore(),p=priceAttractivenessScore(),o=opportunityScore();
@@ -1228,6 +1231,14 @@ function renderQuickDecision(zones,signals){
  const strong=signals?.strong?`<b class="pos">Best:</b> ${safe(signals.strong.label)} (${fmt(signals.strong.value,0)})`:"<b>Best signal:</b> unavailable";
  const weak=signals?.weak?`<b class="warning">Caution:</b> ${safe(signals.weak.label)} (${fmt(signals.weak.value,0)})`:"<b>Caution:</b> unavailable";
  $("quickWhy").innerHTML=`${strong}<br>${weak}`;
+ const d=state.derived||{};
+ const buyBelow=zones&&validPositive(zones.buy)?zones.buy:buyBelowPrice(d);
+ const fairRange=zones&&validPositive(zones.fairLow)&&validPositive(zones.fairHigh)?`${money(zones.fairLow)} – ${money(zones.fairHigh)}`:fairValueText(d);
+ $("quickEntry").innerHTML=gated
+   ? `<b>Entry guide:</b> Waiting for dependable valuation data.`
+   : validPositive(buyBelow)
+     ? `<b>Consider below:</b> ${money(buyBelow)} &nbsp;•&nbsp; <b>Fair-value area:</b> ${safe(fairRange)}`
+     : `<b>Entry guide:</b> A dependable buy-below price is not available yet.`;
  const h=quickHistoryData();
  $("quickHistory").textContent=h?`Prior X-Ray ${fmt(h.previous,0)} • ${h.delta>=0?"▲":"▼"} ${Math.abs(h.delta).toFixed(1)} points${finite(h.age)?` • saved about ${h.age} day${h.age===1?"":"s"} ago`:""}`:"This analysis becomes the history baseline for the next X-Ray.";
 }
