@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#07090c">
 <meta name="description" content="Steve's Stock Board — live quotes, ranked opportunities, charts, alerts, and watchlist backup.">
-<title>Steve's Stock Board 5.5</title>
+<title>Steve's Stock Board 5.6</title>
 <style>
 :root{--bg:#07090c;--panel:#11161d;--panel2:#171e27;--text:#f5f7fa;--muted:#9ba8b7;--line:#29323e;--green:#21d765;--red:#ff6257;--blue:#67adff;--gold:#ffd166}
 *{box-sizing:border-box}
@@ -46,11 +46,13 @@ details{margin-top:16px;background:var(--panel);border:1px solid var(--line);bor
 .portfolioHero{display:grid;gap:10px;margin:4px 0 12px}.portfolioTotals{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.portfolioBox{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:12px}.portfolioBox .big{font-size:22px;font-weight:900;margin-top:5px}.portfolioActions{display:flex;gap:8px;flex-wrap:wrap}.portfolioActions button{width:auto}.portfolioList{display:grid;gap:9px}.holding{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:13px}.holdingTop{display:grid;grid-template-columns:1fr auto;gap:10px}.holdingGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:7px;margin-top:10px}.holdingAction{margin-top:10px;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:#101821;font-size:12px;line-height:1.4}.portfolioEmpty{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:24px;text-align:center;color:var(--muted)}
 @media(min-width:760px){.portfolioTotals{grid-template-columns:repeat(4,1fr)}.portfolioList{grid-template-columns:1fr 1fr}.holdingGrid{grid-template-columns:repeat(4,1fr)}}
 @media(min-width:760px){.controls{grid-template-columns:2fr 1fr auto auto}.controls input{grid-column:auto}.list{grid-template-columns:1fr 1fr}}
+.attention{margin:4px 0 12px;background:linear-gradient(180deg,#142131,#0e1721);border:2px solid #34506d;border-radius:16px;padding:13px}.attentionHead{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.attention h2{margin:0;font-size:18px}.attentionStamp{font-size:11px;color:var(--muted);text-align:right}.attentionGrid{display:grid;gap:8px;margin-top:10px}.attentionItem{display:grid;grid-template-columns:auto 1fr auto;gap:9px;align-items:start;background:rgba(255,255,255,.035);border:1px solid var(--line);border-radius:12px;padding:10px}.attentionRank{min-width:30px;height:30px;display:grid;place-items:center;border-radius:99px;background:#142a43;border:1px solid #2d73b7;font-weight:900}.attentionTicker{font-weight:900;font-size:16px}.attentionWhy{font-size:12px;line-height:1.4;color:#c8d2de;margin-top:3px}.attentionAction{width:auto;padding:7px 9px;font-size:12px;white-space:nowrap}.attentionEmpty{color:var(--muted);line-height:1.45;padding:5px 1px}.attentionFlag{display:inline-block;font-size:10px;font-weight:900;border-radius:99px;padding:3px 6px;margin-left:5px;border:1px solid var(--line)}.attentionFlag.opportunity{color:var(--green)}.attentionFlag.risk{color:var(--gold)}.attentionFlag.event{color:var(--blue)}
+@media(min-width:760px){.attentionGrid{grid-template-columns:1fr 1fr}.attentionItem:first-child{grid-column:1/-1}}
 </style>
 </head>
 <body>
 <header>
-<div class="headerline"><h1>Steve's Stock Board 5.5</h1><span id="marketBadge" class="marketbadge">Checking market…</span></div>
+<div class="headerline"><h1>Steve's Stock Board 5.6</h1><span id="marketBadge" class="marketbadge">Checking market…</span></div>
 <div class="sub">Live quotes • ranked opportunities • Portfolio Center • tap any ticker for Stock X-Ray • charts • visual alerts</div>
 </header>
 <main>
@@ -65,6 +67,10 @@ details{margin-top:16px;background:var(--panel);border:1px solid var(--line);bor
 <button id="refresh" class="primary">Refresh</button><button id="stop">Stop</button>
 </div>
 <div id="status" class="status">Loading saved prices. Add your Finnhub key in Settings for live quotes.</div>
+<section id="attentionPanel" class="attention" aria-live="polite">
+  <div class="attentionHead"><div><h2>What deserves my attention today?</h2><div class="name">A prioritized morning briefing from your Board data</div></div><div id="attentionStamp" class="attentionStamp">Preparing…</div></div>
+  <div id="attentionGrid" class="attentionGrid"><div class="attentionEmpty">Waiting for enough market data to rank today's priorities.</div></div>
+</section>
 <div class="tabs">
 <button class="active" data-view="all">All stocks</button><button data-view="opportunities">Biggest opportunities</button><button data-view="gainers">Gainers</button>
 <button data-view="losers">Losers</button><button data-view="dips">Deepest dips</button>
@@ -89,6 +95,10 @@ details{margin-top:16px;background:var(--panel);border:1px solid var(--line);bor
 </section>
 <div id="list" class="list"></div>
 <div class="tools"><input id="newTicker" placeholder="Add ticker, for example AMZN"><button id="add">Add stock</button><button id="export">Backup board</button><button id="exportCSV">Export CSV</button><button id="import">Restore board</button><button id="reset">Restore base 28</button><input id="importFile" type="file" accept="application/json,.json" hidden></div>
+<details>
+<summary>What’s new in Version 5.6</summary>
+<div class="note" style="margin-top:10px">Adds “What deserves my attention today?” with prioritized opportunities, alerts, risks, unusual moves, direct X-Ray links, and an honest nothing-urgent message when no stock clears the threshold. Existing watchlist, Portfolio Center, charts, alerts, backup, and diagnostics are preserved.</div>
+</details>
 <details>
 <summary>Settings — free market data</summary>
 <div class="settings">
@@ -422,6 +432,42 @@ function xrayHref(x){
  for(const [k,v] of Object.entries(fields))if(v!==null&&v!==undefined&&v!==""&&(typeof v!=="number"||Number.isFinite(v)))q.set(k,String(v));
  return `x-ray.html?${q.toString()}`;
 }
+function attentionReason(x){
+ const reasons=[];
+ if(x.hitLow)reasons.push("your low-price alert was reached");
+ if(x.hitHigh)reasons.push("your high-price alert was reached");
+ if(Number.isFinite(x.opportunity)&&x.opportunity>=76)reasons.push(`opportunity score ${num(x.opportunity,0)}/100`);
+ if(Number.isFinite(x.belowHigh)&&x.belowHigh<=-10&&x.belowHigh>=-28)reasons.push(`${num(Math.abs(x.belowHigh),0)}% below the yearly high`);
+ if(Number.isFinite(x.vsAvg)&&x.vsAvg<0&&x.vsAvg>=-18)reasons.push(`${num(Math.abs(x.vsAvg),0)}% below the yearly average`);
+ if(Number.isFinite(x.dayPct)&&Math.abs(x.dayPct)>=4)reasons.push(`${pct(x.dayPct)} move today`);
+ if(x.oppWarnings?.length)reasons.push(x.oppWarnings[0]);
+ return reasons.slice(0,3).join(" • ")||"mixed signals worth reviewing";
+}
+function attentionPriority(x){
+ let score=Number.isFinite(x.opportunity)?x.opportunity:0;
+ if(x.hitLow||x.hitHigh)score+=35;
+ if(Number.isFinite(x.dayPct))score+=Math.min(18,Math.abs(x.dayPct)*2.2);
+ if(x.oppWarnings?.length)score+=8;
+ if(boardDataConfidence(x).stale)score-=18;
+ return score;
+}
+function attentionType(x){
+ if(x.hitLow||x.hitHigh)return["EVENT","event"];
+ if(x.oppWarnings?.length&&Number.isFinite(x.opportunity)&&x.opportunity<55)return["RISK","risk"];
+ return["OPPORTUNITY","opportunity"];
+}
+function renderAttention(calculatedAll){
+ const grid=$("attentionGrid"),stamp=$("attentionStamp");if(!grid||!stamp)return;
+ const usable=calculatedAll.filter(x=>Number.isFinite(x.price)&&!boardDataConfidence(x).stale);
+ const candidates=usable.filter(x=>x.hitLow||x.hitHigh||(Number.isFinite(x.opportunity)&&x.opportunity>=65)||(Number.isFinite(x.dayPct)&&Math.abs(x.dayPct)>=4)||x.oppWarnings?.length)
+   .sort((a,b)=>attentionPriority(b)-attentionPriority(a)).slice(0,5);
+ stamp.textContent=`Updated ${new Date().toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})}`;
+ if(!candidates.length){
+  grid.innerHTML='<div class="attentionEmpty"><b>Nothing urgent requires attention today.</b><br>The Board has not detected a strong opportunity, alert, unusually large move, or major caution from the available data.</div>';
+  return;
+ }
+ grid.innerHTML=candidates.map((x,idx)=>{const[type,kind]=attentionType(x);return `<article class="attentionItem"><div class="attentionRank">${idx+1}</div><div><div class="attentionTicker">${x.symbol}<span class="attentionFlag ${kind}">${type}</span></div><div class="attentionWhy">${attentionReason(x)}</div></div><button class="attentionAction" onclick="location.href='${xrayHref({...x,opportunityRank:(calculatedAll.filter(v=>Number.isFinite(v.opportunity)).sort((a,b)=>b.opportunity-a.opportunity).findIndex(v=>v.symbol===x.symbol)+1)||null})}'">Open X-Ray</button></article>`}).join("");
+}
 function renderPortfolio(calculatedAll){
  const rows=calculatedAll.filter(x=>holdings[x.symbol]&&Number(holdings[x.symbol].shares)>0);
  let totalValue=0,totalCost=0;
@@ -495,6 +541,7 @@ function saveFullXrayCache(rows){
 function render(){
  const calculatedAll=watch.map(w=>calculated({...w,...(data[w.symbol]||{})}));
  saveFullXrayCache(calculatedAll);
+ renderAttention(calculatedAll);
  const portfolioMode=view==="portfolio";$("portfolioCenter").hidden=!portfolioMode;$("list").hidden=portfolioMode;$("search").disabled=portfolioMode;$("sort").disabled=portfolioMode;$("portfolioCenter").style.display=portfolioMode?"block":"none";if(portfolioMode)renderPortfolio(calculatedAll);
  calculatedAll.forEach(x=>{const hit=x.hitLow||x.hitHigh;if(hit&&!alertedState[x.symbol]){alertedState[x.symbol]=true;showToast(`${x.symbol} price alert reached at ${Number.isFinite(x.price)?"$"+num(x.price):"the current price"}`,x.hitHigh?"success":"warning",6000);playAlertSound()}else if(!hit){alertedState[x.symbol]=false}});
  const all=calculatedAll.filter(x=>Number.isFinite(x.dayPct));
