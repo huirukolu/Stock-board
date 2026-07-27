@@ -1551,5 +1551,23 @@ document.addEventListener("click",e=>{const a=e.target.closest("a[target=\"_blan
 
 const initial=new URLSearchParams(location.search).get("ticker");if(initial){$("ticker").value=initial.toUpperCase();setTimeout(analyze,250)}
 </script>
+
+<script>
+(function(){
+const _setBoard=window.setInterval(()=>{
+  const rank=document.getElementById('boardRank');
+  if(!rank)return;
+  const m=rank.textContent.match(/(\d+)\s+of\s+(\d+)/i);
+  if(m){
+    let r=parseInt(m[1]),t=parseInt(m[2]);
+    if(r>t && t>0){
+      rank.textContent=`Board Rank: ${t} of ${t}`;
+      const meta=document.getElementById('boardMeta');
+      if(meta) meta.textContent='Board ranking corrected because the source values were inconsistent.';
+    }
+  }
+},250);
+})();
+</script>
 </body>
 </html>
