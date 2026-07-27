@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#07090c">
 <meta name="description" content="Steve's Stock Board — live quotes, ranked opportunities, charts, alerts, and watchlist backup.">
-<title>Steve's Stock Board 5.7</title>
+<title>Steve's Stock Board 5.8</title>
 <style>
 :root{--bg:#07090c;--panel:#11161d;--panel2:#171e27;--text:#f5f7fa;--muted:#9ba8b7;--line:#29323e;--green:#21d765;--red:#ff6257;--blue:#67adff;--gold:#ffd166}
 *{box-sizing:border-box}
@@ -53,7 +53,7 @@ details{margin-top:16px;background:var(--panel);border:1px solid var(--line);bor
 </head>
 <body>
 <header>
-<div class="headerline"><h1>Steve's Stock Board 5.7</h1><span id="marketBadge" class="marketbadge">Checking market…</span></div>
+<div class="headerline"><h1>Steve's Stock Board 5.8</h1><span id="marketBadge" class="marketbadge">Checking market…</span></div>
 <div class="sub">Live quotes • ranked opportunities • Portfolio Center • tap any ticker for Stock X-Ray • charts • visual alerts</div>
 </header>
 <main>
@@ -124,8 +124,8 @@ details{margin-top:16px;background:var(--panel);border:1px solid var(--line);bor
 </div>
 </details>
 <details class="versionDetails">
-<summary>What’s new in Version 5.7</summary>
-<div class="note" style="margin-top:10px">Moves backup, restore, CSV export, market-data settings, and diagnostics into one compact tools menu. Add Stock remains visible for everyday use. Version 5.6’s attention briefing and all existing Board functions are preserved.</div>
+<summary>What’s new in Version 5.8</summary>
+<div class="note" style="margin-top:10px">Fixes live-price percentage mismatches. During the regular market session, Finnhub’s live quote now remains authoritative after Yahoo history and chart data load, so the displayed price, day change, vs. average, below high, above low, yearly gain/loss, and range position are all calculated from the same current price.</div>
 </details>
 </main>
 <div id="toastContainer" style="position:fixed;bottom:18px;right:12px;left:12px;z-index:9999;display:flex;flex-direction:column;gap:8px;max-width:380px;margin-left:auto;pointer-events:none"></div>
@@ -648,17 +648,48 @@ async function refresh(options={}){
    const s=watch[i].symbol,old=data[s]||{},merged={...old};
    $("status").textContent=`Loading ${i+1} of ${watch.length}: ${s} • batches of ${BOARD_BATCH_SIZE}`;
    let loaded=Number.isFinite(merged.price)||Number.isFinite(merged.historyPrice);
+   let liveQuote=null;
    if(key&&!stopped){
-    try{Object.assign(merged,await getQuote(s,key));quoteOk++;diagnosticSuccess("finnhub");loaded=true}
-    catch(e){quoteFail++;recordDiagnostic("finnhub",s,e);if(String(e.message||e).includes("rate limited")||String(e.message||e).includes("cooldown"))rateLimited=true}
+    try{
+     liveQuote=await getQuote(s,key);
+     Object.assign(merged,liveQuote);
+     quoteOk++;diagnosticSuccess("finnhub");loaded=true;
+    }catch(e){quoteFail++;recordDiagnostic("finnhub",s,e);if(String(e.message||e).includes("rate limited")||String(e.message||e).includes("cooldown"))rateLimited=true}
    }
    if(stopped)break;
    const needDaily=force||!Number.isFinite(merged.dayPct)||!old.extendedAt||Date.now()-old.extendedAt>10*60*1000;
-   if(needDaily){try{Object.assign(merged,await getExtended(s));diagnosticSuccess("yahooExtended");if(Number.isFinite(merged.price))loaded=true}catch(e){recordDiagnostic("yahooExtended",s,e)}}
+   if(needDaily){
+    try{
+     const daily=await getExtended(s);
+     Object.assign(merged,daily);
+     diagnosticSuccess("yahooExtended");
+     if(Number.isFinite(merged.price))loaded=true;
+    }catch(e){recordDiagnostic("yahooExtended",s,e)}
+   }
    if(stopped)break;
    const needYear=force||!old.yearAt||Date.now()-old.yearAt>24*60*60*1000;
-   if(needYear){try{Object.assign(merged,await getYear(s));diagnosticSuccess("yahooHistory");if(!loaded&&Number.isFinite(merged.historyPrice)){merged.price=merged.historyPrice;loaded=true}}catch(e){recordDiagnostic("yahooHistory",s,e)}}
-   else if(!loaded&&Number.isFinite(merged.historyPrice)){merged.price=merged.historyPrice;loaded=true}
+   if(needYear){
+    try{
+     const yearly=await getYear(s);
+     Object.assign(merged,yearly);
+     diagnosticSuccess("yahooHistory");
+     if(!loaded&&Number.isFinite(merged.historyPrice)){merged.price=merged.historyPrice;loaded=true}
+    }catch(e){recordDiagnostic("yahooHistory",s,e)}
+   }else if(!loaded&&Number.isFinite(merged.historyPrice)){merged.price=merged.historyPrice;loaded=true}
+
+   // Source priority fix: Yahoo daily/history is useful for ranges and charts,
+   // but it must not overwrite a newer Finnhub live regular-session quote.
+   // Restoring the complete live quote here keeps every displayed percentage
+   // synchronized with the exact price shown at the top of the stock card.
+   if(liveQuote){
+    Object.assign(merged,liveQuote);
+   }else if(Number.isFinite(merged.regularPrice)){
+    merged.price=merged.regularPrice;
+    merged.priceSource=merged.extendedSource||"Yahoo daily/extended";
+   }else if(!Number.isFinite(merged.price)&&Number.isFinite(merged.historyPrice)){
+    merged.price=merged.historyPrice;
+    merged.priceSource=merged.historySource||"Yahoo history";
+   }
    data[s]=merged;loaded?ok++:fail++;diagnostics.processed=i+1;diagnostics.loaded=ok;diagnostics.unavailable=fail;diagnostics.updatedAt=Date.now();save();render();renderDiagnostics();
    if(stopped)break;
    const endOfBatch=(i+1)%BOARD_BATCH_SIZE===0 && i<watch.length-1;
