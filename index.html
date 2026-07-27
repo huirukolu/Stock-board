@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#07090c">
 <meta name="description" content="Steve's Stock Board — live quotes, ranked opportunities, charts, alerts, and watchlist backup.">
-<title>Steve's Stock Board 5.6</title>
+<title>Steve's Stock Board 5.7</title>
 <style>
 :root{--bg:#07090c;--panel:#11161d;--panel2:#171e27;--text:#f5f7fa;--muted:#9ba8b7;--line:#29323e;--green:#21d765;--red:#ff6257;--blue:#67adff;--gold:#ffd166}
 *{box-sizing:border-box}
@@ -48,11 +48,12 @@ details{margin-top:16px;background:var(--panel);border:1px solid var(--line);bor
 @media(min-width:760px){.controls{grid-template-columns:2fr 1fr auto auto}.controls input{grid-column:auto}.list{grid-template-columns:1fr 1fr}}
 .attention{margin:4px 0 12px;background:linear-gradient(180deg,#142131,#0e1721);border:2px solid #34506d;border-radius:16px;padding:13px}.attentionHead{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.attention h2{margin:0;font-size:18px}.attentionStamp{font-size:11px;color:var(--muted);text-align:right}.attentionGrid{display:grid;gap:8px;margin-top:10px}.attentionItem{display:grid;grid-template-columns:auto 1fr auto;gap:9px;align-items:start;background:rgba(255,255,255,.035);border:1px solid var(--line);border-radius:12px;padding:10px}.attentionRank{min-width:30px;height:30px;display:grid;place-items:center;border-radius:99px;background:#142a43;border:1px solid #2d73b7;font-weight:900}.attentionTicker{font-weight:900;font-size:16px}.attentionWhy{font-size:12px;line-height:1.4;color:#c8d2de;margin-top:3px}.attentionAction{width:auto;padding:7px 9px;font-size:12px;white-space:nowrap}.attentionEmpty{color:var(--muted);line-height:1.45;padding:5px 1px}.attentionFlag{display:inline-block;font-size:10px;font-weight:900;border-radius:99px;padding:3px 6px;margin-left:5px;border:1px solid var(--line)}.attentionFlag.opportunity{color:var(--green)}.attentionFlag.risk{color:var(--gold)}.attentionFlag.event{color:var(--blue)}
 @media(min-width:760px){.attentionGrid{grid-template-columns:1fr 1fr}.attentionItem:first-child{grid-column:1/-1}}
+.addTickerBar{display:grid;grid-template-columns:1fr auto;gap:8px;margin:13px 0}.addTickerBar button{width:auto;min-width:112px}.toolMenu{margin-top:14px}.toolMenu>summary{display:flex;align-items:center;justify-content:space-between;gap:10px;list-style:none;font-size:17px}.toolMenu>summary::-webkit-details-marker{display:none}.toolMenu>summary:after{content:"Open";font-size:11px;color:var(--blue);border:1px solid var(--line);border-radius:99px;padding:4px 8px}.toolMenu[open]>summary:after{content:"Close"}.toolSection{padding-top:12px;margin-top:12px;border-top:1px solid var(--line)}.toolSection:first-of-type{border-top:0;margin-top:4px}.toolSection h3{margin:0 0 8px;font-size:14px}.toolButtons{display:grid;grid-template-columns:1fr 1fr;gap:8px}.toolButtons button{width:100%}.toolHint{margin-top:8px}.dangerTool{color:#ffb4ae}.settingsCompact{display:grid;gap:9px}.diagCompact{display:grid;gap:8px}.versionDetails{margin-top:12px}@media(max-width:430px){header{padding:11px 12px}h1{font-size:23px}.sub{font-size:12px;line-height:1.35}.addTickerBar{grid-template-columns:1fr}.addTickerBar button{width:100%}.toolButtons{grid-template-columns:1fr 1fr}details{padding:12px}}
 </style>
 </head>
 <body>
 <header>
-<div class="headerline"><h1>Steve's Stock Board 5.6</h1><span id="marketBadge" class="marketbadge">Checking market…</span></div>
+<div class="headerline"><h1>Steve's Stock Board 5.7</h1><span id="marketBadge" class="marketbadge">Checking market…</span></div>
 <div class="sub">Live quotes • ranked opportunities • Portfolio Center • tap any ticker for Stock X-Ray • charts • visual alerts</div>
 </header>
 <main>
@@ -94,28 +95,37 @@ details{margin-top:16px;background:var(--panel);border:1px solid var(--line);bor
   <div id="portfolioList" class="portfolioList"></div>
 </section>
 <div id="list" class="list"></div>
-<div class="tools"><input id="newTicker" placeholder="Add ticker, for example AMZN"><button id="add">Add stock</button><button id="export">Backup board</button><button id="exportCSV">Export CSV</button><button id="import">Restore board</button><button id="reset">Restore base 28</button><input id="importFile" type="file" accept="application/json,.json" hidden></div>
-<details>
-<summary>What’s new in Version 5.6</summary>
-<div class="note" style="margin-top:10px">Adds “What deserves my attention today?” with prioritized opportunities, alerts, risks, unusual moves, direct X-Ray links, and an honest nothing-urgent message when no stock clears the threshold. Existing watchlist, Portfolio Center, charts, alerts, backup, and diagnostics are preserved.</div>
-</details>
-<details>
-<summary>Settings — free market data</summary>
-<div class="settings">
-<input id="apiKey" type="password" placeholder="Finnhub API key">
-<button id="saveKey">Save key on this device</button>
-<label class="soundrow"><input type="checkbox" id="soundAlerts"> Play sound when a price alert triggers</label>
-<div class="note">Finnhub supplies live regular-session quotes. Yahoo supplies charts, 2026 history, and premarket/after-hours data when available. The opportunity ranking combines a built-in company quality/valuation rating with price trend, pullback, yearly range position, average price, and recovery signals. It is a research priority score—not a buy recommendation. Alerts are visual only and appear while this page is open. Verify any trade price in Fidelity or Robinhood.</div>
+<div class="addTickerBar"><input id="newTicker" placeholder="Add ticker, for example AMZN"><button id="add" class="primary">Add stock</button></div>
+<input id="importFile" type="file" accept="application/json,.json" hidden>
+<details class="toolMenu">
+<summary><span>Board tools & settings</span></summary>
+<div class="toolSection">
+  <h3>Backup and restore</h3>
+  <div class="toolButtons"><button id="export">Backup board</button><button id="exportCSV">Export CSV</button><button id="import">Restore board</button><button id="reset" class="dangerTool">Restore base 28</button></div>
+  <div class="note toolHint">Use Backup board before making major changes. Restore base 28 resets the watchlist to the original starter list.</div>
+</div>
+<div class="toolSection">
+  <h3>Free market-data settings</h3>
+  <div class="settingsCompact">
+    <input id="apiKey" type="password" placeholder="Finnhub API key">
+    <button id="saveKey">Save key on this device</button>
+    <label class="soundrow"><input type="checkbox" id="soundAlerts"> Play sound when a price alert triggers</label>
+    <div class="note">Finnhub supplies live regular-session quotes. Yahoo supplies charts, yearly history, and premarket/after-hours data when available. Verify any trade price in Fidelity or Robinhood.</div>
+  </div>
+</div>
+<div class="toolSection">
+  <h3>Data-feed diagnostics</h3>
+  <div class="diagCompact">
+    <div id="diagSummary" class="note">No refresh diagnostics recorded yet.</div>
+    <div id="diagGrid" class="diagGrid"></div>
+    <div id="diagErrors" class="diagErrors"></div>
+    <button id="clearDiagnostics">Clear diagnostics</button>
+  </div>
 </div>
 </details>
-<details>
-<summary>Data-feed diagnostics</summary>
-<div class="settings">
-  <div id="diagSummary" class="note">No refresh diagnostics recorded yet.</div>
-  <div id="diagGrid" class="diagGrid"></div>
-  <div id="diagErrors" class="diagErrors"></div>
-  <button id="clearDiagnostics">Clear diagnostics</button>
-</div>
+<details class="versionDetails">
+<summary>What’s new in Version 5.7</summary>
+<div class="note" style="margin-top:10px">Moves backup, restore, CSV export, market-data settings, and diagnostics into one compact tools menu. Add Stock remains visible for everyday use. Version 5.6’s attention briefing and all existing Board functions are preserved.</div>
 </details>
 </main>
 <div id="toastContainer" style="position:fixed;bottom:18px;right:12px;left:12px;z-index:9999;display:flex;flex-direction:column;gap:8px;max-width:380px;margin-left:auto;pointer-events:none"></div>
