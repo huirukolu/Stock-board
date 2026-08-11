@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#07090c">
-<meta name="description" content="Steve's Stock X-Ray — valuation, fundamentals, news, analyst ratings and an explained research score.">
-<title>Steve's Stock X-Ray 6.8</title>
+<meta name="description" content="Steve's Stock X-Ray 6.9 — valuation, fundamentals, news, analyst ratings and an explained research score.">
+<title>Steve's Stock X-Ray 6.9</title>
 <style>
 :root{
   --bg:#07090c;--panel:#11161d;--panel2:#171e27;--text:#f5f7fa;--muted:#9ba8b7;
@@ -83,7 +83,7 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
 </head>
 <body>
 <header>
-  <div class="headerline"><div><h1>Steve's Stock X-Ray 6.8</h1><div class="sub">Fast decisions with a five-second summary, Board context, score history, price zones and explained scoring</div></div><button id="backBtn">Board</button></div>
+  <div class="headerline"><div><h1>Steve's Stock X-Ray 6.9</h1><div class="sub">Fast decisions with a five-second summary, Board context, score history, price zones and explained scoring</div></div><button id="backBtn">Board</button></div>
 </header>
 <main>
   <div class="searchbar">
@@ -289,7 +289,7 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
 
   <details>
     <summary>What’s new in Version 6.8 <span class="releaseBadge">NEW</span></summary>
-    <div class="note" style="margin-top:10px">Adds visible staged loading progress • keeps the previous result on screen while refreshing • improves repeat-run feedback • preserves Board context, buy-below guidance, fair-value safeguards, comparisons, notes, and the complete explained score.</div>
+    <div class="note" style="margin-top:10px">Adds consistent insufficient-data safeguards • keeps the previous result on screen while refreshing • preserves staged loading, Board context, buy-below guidance, fair-value safeguards, comparisons, notes, and the complete explained score.</div>
   </details>
 
   <details>
@@ -357,12 +357,16 @@ function simpleVerdict(score){
  return "AVOID";
 }
 function verdictReason(d){
+ if(!finite(state.overall)||state.dataConfidence<50){
+   const available=Object.values(state.scores||{}).filter(finite).length;
+   return `Only ${available} of 9 scoring sections are available. No Buy, Hold or Avoid conclusion is issued until the data is dependable.`;
+ }
  const positives=[], risks=[];
  if(finite(d.pe)&&d.pe<=35) positives.push("valuation is within your preferred range");
  if(finite(d.revGrowth)&&d.revGrowth>10) positives.push("revenue growth is healthy");
  if(finite(d.roe)&&d.roe>20) positives.push("profitability is strong");
  if(finite(d.analystUpside)&&d.analystUpside>10) positives.push("analyst upside is positive");
- if(finite(d.debtEq)&&d.debtEq>150) risks.push("debt is elevated");
+ if(finite(d.debtEquity)&&d.debtEquity>150) risks.push("debt is elevated");
  if(finite(d.belowHigh)&&d.belowHigh<-30) risks.push("the price trend may be damaged");
  if(!finite(d.fcf)||d.fcf===0) risks.push("free-cash-flow data is unavailable");
  const pos=positives[0]||"the available data is mixed";
@@ -497,12 +501,12 @@ function scoreChangeSummary(){
 }
 function personalRules(d,analystCount,buyCount){
  return [
-  ["P/E at or below 40",finite(d.pe)&&d.pe>0&&d.pe<=40],
-  ["Positive revenue growth",finite(d.revGrowth)&&d.revGrowth>0],
-  ["Strong profitability",finite(d.roe)?d.roe>15:(finite(d.netMargin)&&d.netMargin>10)],
-  ["Debt under control",!finite(d.debtEq)||d.debtEq<150],
-  ["Analysts mostly positive",analystCount>0&&buyCount/analystCount>=.6],
-  ["Not more than 15% above fair value",!validPositive(d.roughValue)||!validPositive(d.price)||d.price<=d.roughValue*1.15],
+  ["P/E at or below 40",finite(d.pe)?d.pe>0&&d.pe<=40:null],
+  ["Positive revenue growth",finite(d.revGrowth)?d.revGrowth>0:null],
+  ["Strong profitability",finite(d.roe)?d.roe>15:finite(d.netMargin)?d.netMargin>10:null],
+  ["Debt under control",finite(d.debtEquity)?d.debtEquity<150:null],
+  ["Analysts mostly positive",analystCount>0?buyCount/analystCount>=.6:null],
+  ["Not more than 15% above fair value",validPositive(d.roughValue)&&validPositive(d.price)?d.price<=d.roughValue*1.15:null],
   ["Price data available",validPositive(d.price)],
   ["Cash-flow data available",validPositive(d.fcf)]
  ];
@@ -520,7 +524,7 @@ function triggerHTML(d,analystCount){
    "Revenue growth turns negative",
    "P/E rises above 50× without faster earnings growth",
    "Analyst downgrades accelerate",
-   finite(d.debtEq)&&d.debtEq>100?"Debt/equity rises further":"Balance-sheet strength deteriorates"
+   finite(d.debtEquity)&&d.debtEquity>100?"Debt/equity rises further":"Balance-sheet strength deteriorates"
   ]
  };
 }
@@ -881,7 +885,7 @@ function compute(){
  const risk=average([
    finite(beta)?scoreLinear(beta,2.1,.65):null,
    finite(debtEquity)?debtScore(debtEquity):null,
-   finite(belowHigh)&&belowHigh<-40?25:75
+   finite(belowHigh)?(belowHigh<-40?25:75):null
  ]);
  const bq=finite(state.boardData?.quality)?Number(state.boardData.quality):null;
  const bv=finite(state.boardData?.value)?Number(state.boardData.value):null;
@@ -892,7 +896,7 @@ function compute(){
  ]);
  const boardRisk=average([
    finite(state.boardData?.range)?(Number(state.boardData.range)<18?35:Number(state.boardData.range)>94?55:75):null,
-   finite(state.boardData?.belowHigh)&&Number(state.boardData.belowHigh)<-40?30:75
+   finite(state.boardData?.belowHigh)?(Number(state.boardData.belowHigh)<-40?30:75):null
  ]);
  const scores={
   valuation:finite(valuation)&&valuationEvidence>=1?valuation:(!valuationWarning?bv:null),
@@ -920,14 +924,16 @@ function compute(){
  const scoreSpread=Object.values(scores).filter(finite).map(Number);
  const dispersion=scoreSpread.length?Math.max(...scoreSpread)-Math.min(...scoreSpread):100;
  const investmentConfidence=clamp((finite(overall)?Math.abs(overall-50)*1.25:0)+(100-dispersion)*.35);
- state.scores=scores;state.confidence=dataConfidence;state.dataConfidence=dataConfidence;state.investmentConfidence=investmentConfidence;state.overall=overall;
+ // Keep partial category math for transparency, but never publish an overall
+ // score when the feed coverage is too thin to support a dependable decision.
+ state.scores=scores;state.confidence=dataConfidence;state.dataConfidence=dataConfidence;state.investmentConfidence=investmentConfidence;state.rawOverall=overall;state.overall=dataConfidence>=50?overall:null;
  const roughValueCandidate=finite(eps)&&eps>0?eps*(state.industry?.preferredPE||28):null;
  const roughValue=plausibleFairValue(roughValueCandidate,price)&&plausibleMultiple(derivedPe,250)?roughValueCandidate:null;
  const fairCandidates=[target,roughValue].filter(v=>plausibleFairValue(v,price));
  const fairEstimate=fairCandidates.length?median(fairCandidates):null;
  const marginOfSafety=finite(fairEstimate)&&finite(price)?(fairEstimate/price-1)*100:null;
  state.derived={price,pe,fpe,eps,ps,pb,peg,revGrowth,epsGrowth,grossMargin,operatingMargin,netMargin,roe,currentRatio,debtEquity,fcf,cash,debt,ebitda,roic,ebitdaMargin,target,analystUpside,beta,high52,low52,belowHigh,aboveLow,dividendYield,payoutRatio,roughValue,fairEstimate,marginOfSafety,valuationWarning,valuationEvidence,rawPeCandidates};
- state.verdict=verdict(overall,dataConfidence);
+ state.verdict=verdict(state.overall,dataConfidence);
 }
 function recommendationScore(){
  const r=state.recommendations[0];if(!r)return null;
@@ -935,7 +941,7 @@ function recommendationScore(){
  return clamp((((r.strongBuy||0)*100+(r.buy||0)*78+(r.hold||0)*50+(r.sell||0)*22+(r.strongSell||0)*0)/total));
 }
 function verdict(score,confidence){
- if(!finite(score)||confidence<25)return"INSUFFICIENT DATA";
+ if(!finite(score)||confidence<50)return"INSUFFICIENT DATA";
  if(score>=82)return"STRONG BUY CANDIDATE";
  if(score>=72)return"POSSIBLE BUY";
  if(score>=60)return"WATCH / FAIR";
@@ -944,6 +950,10 @@ function verdict(score,confidence){
 }
 function buildNarrative(){
  const d=state.derived,s=state.scores,good=[],bad=[];
+ const available=Object.values(s).filter(finite).length;
+ if(!finite(state.overall)||state.dataConfidence<50){
+   return `The X-Ray cannot issue a dependable rating for ${state.name}. Only <b>${available} of 9 scoring sections</b> are available, so the overall score is withheld. The appropriate action is <b>WAIT</b> until more fundamentals, valuation and price evidence are available.`;
+ }
  if(finite(s.profitability)&&s.profitability>=75)good.push("profitability is strong");
  if(finite(s.balance)&&s.balance>=75)good.push("the balance sheet looks healthy");
  if(finite(s.growth)&&s.growth>=72)good.push("growth is favorable");
@@ -1069,6 +1079,7 @@ function decisionScoreCard(label,value){
 }
 function marginSafetyText(){
  const d=state.derived;
+ if(state.dataConfidence<50||!finite(state.overall))return "Margin-of-safety guidance is withheld until enough data is available for a dependable overall score.";
  if(!finite(d.marginOfSafety))return "A rough margin-of-safety estimate could not be calculated from the available data.";
  if(d.marginOfSafety>=20)return `Estimated margin of safety: <b class="pos">${pct(d.marginOfSafety)}</b>. The current price is meaningfully below the analyst-consensus rough-value estimate of ${money(d.fairEstimate)}.`;
  if(d.marginOfSafety>=5)return `Estimated margin of safety: <b class="warning">${pct(d.marginOfSafety)}</b>. The stock appears modestly below the analyst-consensus rough-value estimate of ${money(d.fairEstimate)}.`;
@@ -1077,6 +1088,7 @@ function marginSafetyText(){
 }
 function buffettLens(){
  const d=state.derived,s=state.scores,parts=[];
+ if(state.dataConfidence<50||!finite(state.overall))return "There is not enough dependable information for a Buffett-style business-quality conclusion. Review the available raw figures below, then wait for fuller profitability, balance-sheet, cash-flow and valuation data.";
  parts.push(`<b>What the business looks like:</b> ${safe(state.name)} appears ${s.profitability>=70?"economically strong":"mixed in business quality"} based on the available margins and returns.`);
  parts.push(`<b>Financial durability:</b> ${s.balance>=70?"The balance sheet appears resilient.":s.balance>=50?"The balance sheet is acceptable but deserves review.":"Financial strength is a concern."}`);
  parts.push(`<b>Owner earnings:</b> ${s.cashflow>=70?"Cash generation is supportive.":s.cashflow>=50?"Cash generation is adequate.":"Cash-flow quality is weak or incomplete."}`);
@@ -1192,11 +1204,12 @@ function renderBoardContext(){
 }
 function decisionCockpitHTML(zones){
  const d=state.derived,q=qualityScore(),p=priceAttractivenessScore(),o=opportunityScore();
+ const gated=state.dataConfidence<50||!finite(state.overall);
  const currentZone=zones?zones.stateName:"WAIT";
  return[
-   `<div class="cockpitTile"><div class="label">Company quality</div><strong>${finite(q)?fmt(q,0):"—"}</strong></div>`,
-   `<div class="cockpitTile"><div class="label">Price today</div><strong>${finite(p)?fmt(p,0):"—"}</strong></div>`,
-   `<div class="cockpitTile"><div class="label">Opportunity</div><strong>${finite(o)?fmt(o,0):"—"}</strong></div>`,
+   `<div class="cockpitTile"><div class="label">Company quality</div><strong>${!gated&&finite(q)?fmt(q,0):"—"}</strong></div>`,
+   `<div class="cockpitTile"><div class="label">Price today</div><strong>${!gated&&finite(p)?fmt(p,0):"—"}</strong></div>`,
+   `<div class="cockpitTile"><div class="label">Opportunity</div><strong>${!gated&&finite(o)?fmt(o,0):"—"}</strong></div>`,
    `<div class="cockpitTile"><div class="label">Today's zone</div><strong>${safe(currentZone)}</strong></div>`
  ].join("");
 }
@@ -1225,14 +1238,16 @@ function renderQuickDecision(zones,signals){
    ? `Only ${Object.values(state.scores).filter(finite).length} of 9 scoring sections are available. No Buy, Hold or Avoid call is issued below 50% data confidence.`
    : (zones?.reason||"Not enough dependable price information for a price-zone decision.");
  $("quickGrid").innerHTML=[
-   `<div class="quickTile"><div class="label">Quality</div><strong>${finite(q)?fmt(q,0):"—"}</strong></div>`,
-   `<div class="quickTile"><div class="label">Price today</div><strong>${finite(p)?fmt(p,0):"—"}</strong></div>`,
-   `<div class="quickTile"><div class="label">Opportunity</div><strong>${finite(o)?fmt(o,0):"—"}</strong></div>`,
-   `<div class="quickTile"><div class="label">Risk control</div><strong>${finite(risk)?fmt(risk,0):"—"}</strong></div>`
+   `<div class="quickTile"><div class="label">Quality</div><strong>${!gated&&finite(q)?fmt(q,0):"—"}</strong></div>`,
+   `<div class="quickTile"><div class="label">Price today</div><strong>${!gated&&finite(p)?fmt(p,0):"—"}</strong></div>`,
+   `<div class="quickTile"><div class="label">Opportunity</div><strong>${!gated&&finite(o)?fmt(o,0):"—"}</strong></div>`,
+   `<div class="quickTile"><div class="label">Risk control</div><strong>${!gated&&finite(risk)?fmt(risk,0):"—"}</strong></div>`
  ].join("");
  const strong=signals?.strong?`<b class="pos">Best:</b> ${safe(signals.strong.label)} (${fmt(signals.strong.value,0)})`:"<b>Best signal:</b> unavailable";
  const weak=signals?.weak?`<b class="warning">Caution:</b> ${safe(signals.weak.label)} (${fmt(signals.weak.value,0)})`:"<b>Caution:</b> unavailable";
- $("quickWhy").innerHTML=`${strong}<br>${weak}`;
+ $("quickWhy").innerHTML=gated
+   ? `<b>Evidence:</b> Too few scoring sections are available to identify a dependable best signal or biggest caution.`
+   : `${strong}<br>${weak}`;
  const d=state.derived||{};
  const buyBelow=zones&&validPositive(zones.buy)?zones.buy:buyBelowPrice(d);
  const fairRange=zones&&validPositive(zones.fairLow)&&validPositive(zones.fairHigh)?`${money(zones.fairLow)} – ${money(zones.fairHigh)}`:fairValueText(d);
@@ -1242,7 +1257,9 @@ function renderQuickDecision(zones,signals){
      ? `<b>Consider below:</b> ${money(buyBelow)} &nbsp;•&nbsp; <b>Fair-value area:</b> ${safe(fairRange)}`
      : `<b>Entry guide:</b> A dependable buy-below price is not available yet.`;
  const h=quickHistoryData();
- $("quickHistory").textContent=h?`Prior X-Ray ${fmt(h.previous,0)} • ${h.delta>=0?"▲":"▼"} ${Math.abs(h.delta).toFixed(1)} points${finite(h.age)?` • saved about ${h.age} day${h.age===1?"":"s"} ago`:""}`:"This analysis becomes the history baseline for the next X-Ray.";
+ $("quickHistory").textContent=gated
+   ? "No score history is saved until enough data is available for a dependable overall score."
+   : h?`Prior X-Ray ${fmt(h.previous,0)} • ${h.delta>=0?"▲":"▼"} ${Math.abs(h.delta).toFixed(1)} points${finite(h.age)?` • saved about ${h.age} day${h.age===1?"":"s"} ago`:""}`:"This analysis becomes the history baseline for the next X-Ray.";
 }
 
 function hundredPointBreakdown(){
@@ -1323,8 +1340,8 @@ function render(){
  }
  $("decisionCockpit").innerHTML=decisionCockpitHTML(zones);
  $("decisionSummary").textContent=decisionOneLine(zones);
- const qScore=qualityScore(),pScore=priceAttractivenessScore(),oScore=opportunityScore();
- $("opportunityScores").innerHTML=[decisionScoreCard("Company quality",qScore),decisionScoreCard("Price attractiveness",pScore),decisionScoreCard("Opportunity",oScore),decisionScoreCard("Risk control",state.scores.risk)].join("");
+ const qScore=qualityScore(),pScore=priceAttractivenessScore(),oScore=opportunityScore(),decisionGated=state.dataConfidence<50||!finite(state.overall);
+ $("opportunityScores").innerHTML=[decisionScoreCard("Company quality",decisionGated?null:qScore),decisionScoreCard("Price attractiveness",decisionGated?null:pScore),decisionScoreCard("Opportunity",decisionGated?null:oScore),decisionScoreCard("Risk control",decisionGated?null:state.scores.risk)].join("");
  $("pullbackSummary").innerHTML=pullbackText();
 
  const topR=state.recommendations[0]||{};
@@ -1340,33 +1357,38 @@ function render(){
  $("scoreReasons").innerHTML=reasonRows.map(p=>`<div class="reasonRow"><div><b>${safe(p.key)}</b><div class="reasonNote">${safe(p.note)} • category score ${finite(p.score)?fmt(p.score,0):"—"}/100</div></div><div class="reasonPts">${finite(p.pts)?fmt(p.pts,1):"—"}/${p.max}</div></div>`).join("");
  $("scoreMath").textContent=finite(hp.total)
    ? (state.dataConfidence<50
-      ? `Available categories mathematically produce ${fmt(hp.total,1)}/100, but the recommendation is withheld because data confidence is only ${fmt(state.dataConfidence,0)}%.`
+      ? `Overall score withheld. Only ${Object.values(state.scores).filter(finite).length} of 9 scoring sections are available, and data confidence is ${fmt(state.dataConfidence,0)}%. Partial category results below are shown for reference only.`
       : `Supported categories produce ${fmt(hp.total,1)} out of 100. Missing categories are excluded and disclosed rather than guessed.`)
    : "Not enough supported categories to calculate the score.";
  const signals=strongestAndWeakest();
  renderQuickDecision(zones,signals);
- $("strongestSignal").innerHTML=signals.strong?`<b class="pos">✓ Strongest: ${safe(signals.strong.label)}</b><span>${fmt(signals.strong.value,0)}/100 — this is the strongest supported part of the current case.</span>`:`<b>Strongest signal unavailable</b>`;
- $("biggestCaution").innerHTML=signals.weak?`<b class="warning">⚠ Biggest caution: ${safe(signals.weak.label)}</b><span>${fmt(signals.weak.value,0)}/100 — verify this area before making a decision.</span>`:`<b>Biggest caution unavailable</b>`;
+ $("strongestSignal").innerHTML=decisionGated?`<b>Strongest signal unavailable</b><span>Too few scoring sections are available for a dependable conclusion.</span>`:signals.strong?`<b class="pos">✓ Strongest: ${safe(signals.strong.label)}</b><span>${fmt(signals.strong.value,0)}/100 — this is the strongest supported part of the current case.</span>`:`<b>Strongest signal unavailable</b>`;
+ $("biggestCaution").innerHTML=decisionGated?`<b>Biggest caution unavailable</b><span>Missing evidence is the main caution; wait for fuller data.</span>`:signals.weak?`<b class="warning">⚠ Biggest caution: ${safe(signals.weak.label)}</b><span>${fmt(signals.weak.value,0)}/100 — verify this area before making a decision.</span>`:`<b>Biggest caution unavailable</b>`;
  $("steveVerdict").innerHTML=`<b>${clearVerdict}</b><br>${safe(verdictReason(d))}`;
- $("steveVerdictMetrics").innerHTML=[
+ $("steveVerdictMetrics").innerHTML=(state.dataConfidence<50?[
+   metric("Overall conviction","Not available — insufficient data"),
+   metric("Fair value range","Not available — insufficient data"),
+   metric("Biggest opportunity","Not determined"),
+   metric("Biggest risk","Insufficient evidence")
+ ]:[
    metric("Overall conviction",finite(hp.total)?`${fmt(hp.total,0)}/100`:"Not available"),
    metric("Fair value range",fairValueText(d)),
    metric("Biggest opportunity",finite(d.revGrowth)&&d.revGrowth>10?"Growth":"Not clearly identified"),
    metric("Biggest risk",(!validPositive(d.fcf))?"Cash-flow data gap":(finite(d.belowHigh)&&d.belowHigh<-30?"Weak price trend":"No major warning"))
- ].join("");
+ ]).join("");
  const trig=triggerHTML(d,analystCount);
  $("buyTriggers").innerHTML=trig.buy.map(x=>`✓ ${safe(x)}`).join("<br>");
  $("avoidTriggers").innerHTML=trig.avoid.map(x=>`⚠ ${safe(x)}`).join("<br>");
- const rules=personalRules(d,analystCount,buyCount),passed=rules.filter(x=>x[1]).length;
- $("ruleScore").textContent=`Steve Rule Pass: ${passed}/${rules.length}`;
- $("ruleList").innerHTML=rules.map(x=>`${x[1]?"✓":"✕"} ${safe(x[0])}`).join("<br>");
+ const rules=personalRules(d,analystCount,buyCount),evaluated=rules.filter(x=>x[1]!==null),passed=evaluated.filter(x=>x[1]).length;
+ $("ruleScore").textContent=decisionGated?"Steve Rule Pass: Not scored — insufficient data":`Steve Rule Pass: ${passed}/${evaluated.length}`;
+ $("ruleList").innerHTML=rules.map(x=>`${x[1]===null?"—":x[1]?"✓":"✕"} ${safe(x[0])}${x[1]===null?" — data unavailable":""}`).join("<br>");
  const ai=aiExposure(state.symbol,state.profile.name||state.profile.ticker||"");
  $("aiFit").innerHTML=[metric("Primary exposure",ai.type),metric("AI relevance",`${ai.score}/100`),metric("Classification",ai.classification),metric("Preferred P/E guide",`${ai.preferredPE}×`)].join("");
  $("aiFitNote").textContent=`Why it matters: ${ai.role} Main caution: ${ai.risk}`;
  const conviction=convictionLabel(state.overall,state.investmentConfidence);
  $("confidenceSplit").innerHTML=[
    metric("Data confidence",`${fmt(state.dataConfidence,0)}%`),
-   metric("Investment confidence",`${fmt(state.investmentConfidence,0)}%`),
+   metric("Investment confidence",state.dataConfidence<50?"Withheld":`${fmt(state.investmentConfidence,0)}%`),
    metric("Conviction meter",conviction.stars),
    metric("Industry lens",ai.industry.replace(/\b\w/g,c=>c.toUpperCase()))
  ].join("");
@@ -1437,10 +1459,10 @@ function render(){
  $("balancedConclusion").textContent=bb.conclusion;
  $("changedSummary").textContent=changedText();
  $("decisionScores").innerHTML=[
-   decisionScoreCard("Overall",state.overall),
-   decisionScoreCard("Value",state.scores.valuation),
-   decisionScoreCard("Quality",average([state.scores.profitability,state.scores.balance,state.scores.cashflow])),
-   decisionScoreCard("Risk control",state.scores.risk)
+   decisionScoreCard("Overall",decisionGated?null:state.overall),
+   decisionScoreCard("Value",decisionGated?null:state.scores.valuation),
+   decisionScoreCard("Quality",decisionGated?null:average([state.scores.profitability,state.scores.balance,state.scores.cashflow])),
+   decisionScoreCard("Risk control",decisionGated?null:state.scores.risk)
  ].join("");
  $("marginSafety").innerHTML=marginSafetyText();
 
@@ -1452,7 +1474,6 @@ function render(){
  $("hundredConfidence").textContent=state.dataConfidence<50
    ? `Recommendation withheld: ${h.available}/100 possible points supported; data confidence ${fmt(state.dataConfidence,0)}%.`
    : `${h.available}/100 possible points supported by available data`;
- $("hundredRing").style.setProperty("--score",finite(h.total)?h.total:0);$("hundredRing").style.setProperty("--ringColor",ringColor(h.total));
  $("hundredBreakdown").innerHTML=h.parts.map(p=>{
    const shown=finite(p.points)?fmt(p.points,1):"—";
    const width=finite(p.points)?clamp(p.points/p.max*100):0;
@@ -1525,7 +1546,7 @@ $("clearNotesBtn").onclick=()=>{
 
 $("copyBtn").onclick=async()=>{
  const d=state.derived;
- const text=`${state.symbol} — ${state.name}\nSteveScore: ${finite(state.overall)?fmt(state.overall,0)+"/100":"Unavailable"}\nRating: ${state.verdict}\nPrice: ${money(d.price)}\nP/E: ${fmt(d.pe,1)}\nRevenue growth: ${pct(d.revGrowth)}\nAnalyst target: ${money(d.target)}\nData confidence: ${fmt(state.dataConfidence,0)}% • Investment confidence: ${fmt(state.investmentConfidence,0)}%\n\n${$("explain").innerText}`;
+ const text=`${state.symbol} — ${state.name}\nSteveScore: ${finite(state.overall)?fmt(state.overall,0)+"/100":"Unavailable — insufficient data"}\nRating: ${state.verdict}\nPrice: ${money(d.price)}\nP/E: ${fmt(d.pe,1)}\nRevenue growth: ${pct(d.revGrowth)}\nAnalyst target: ${money(d.target)}\nData confidence: ${fmt(state.dataConfidence,0)}% • Investment confidence: ${state.dataConfidence<50?"Withheld":fmt(state.investmentConfidence,0)+"%"}\n\n${$("explain").innerText}`;
  try{await navigator.clipboard.writeText(text);$("status").textContent="X-Ray summary copied."}catch(e){$("status").textContent="Copy was blocked by this browser."}
 };
 
