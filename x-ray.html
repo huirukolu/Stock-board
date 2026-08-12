@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#07090c">
 <meta name="description" content="Steve's Stock X-Ray — valuation, fundamentals, news, analyst ratings and an explained research score.">
-<title>Steve's Stock X-Ray 4.2</title>
+<title>Steve's Stock X-Ray 4.3</title>
 <style>
 :root{
   --bg:#07090c;--panel:#11161d;--panel2:#171e27;--text:#f5f7fa;--muted:#9ba8b7;
@@ -70,7 +70,7 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
 </head>
 <body>
 <header>
-  <div class="headerline"><div><h1>Steve's Stock X-Ray 4.2</h1><div class="sub">Deep research laboratory — original Stock Board remains untouched — coverage-aware 100-point rating</div></div><button id="backBtn">Board</button></div>
+  <div class="headerline"><div><h1>Steve's Stock X-Ray 4.3</h1><div class="sub">Deep research laboratory — original Stock Board remains untouched — coverage-aware 100-point rating</div></div><button id="backBtn">Board</button></div>
 </header>
 <main>
   <div class="searchbar">
@@ -126,7 +126,7 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
       <div id="hundredBreakdown" class="scoreBars" style="margin-top:12px"></div>
       <div class="note" style="margin-top:9px">
         Allocation: Valuation 20, Growth 20, Financial Strength 20, Profitability 15, Cash Flow 10, Analyst View 5, Price Momentum 5, Risk Control 5.
-        Missing sections are not counted as zero. A buy/hold/avoid verdict is withheld when data coverage is too limited.
+        Missing sections are not counted as zero. A buy verdict requires at least 70% measurement completeness, both cash-flow checks, and no critical valuation, financial-strength or risk warning.
       </div>
     </section>
 
@@ -232,7 +232,7 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
 </main>
 <script>
 const $=id=>document.getElementById(id);
-const state={symbol:"",name:"",instrumentType:"",quote:{},profile:{},metrics:{},summary:{},lookup:{},chart:{},recommendations:[],news:[],scores:{},evidence:{available:0,total:21},scoreCoverage:0,confidence:0,overall:null,verdict:"",compare:null};
+const state={symbol:"",name:"",instrumentType:"",quote:{},profile:{},metrics:{},summary:{},lookup:{},chart:{},recommendations:[],news:[],scores:{},evidence:{available:0,total:22},cashflowEvidence:0,scoreCoverage:0,confidence:0,overall:null,verdict:"",compare:null};
 $("apiKey").value=localStorage.getItem("finnhubKey")||"";
 const clamp=(v,a=0,b=100)=>Math.max(a,Math.min(b,v));
 const finite=v=>v!==null&&v!==undefined&&typeof v!=="boolean"&&!(typeof v==="string"&&!v.trim())&&Number.isFinite(Number(v));
@@ -280,6 +280,15 @@ function debtScore(v){
  if(v<20)return 100;if(v<50)return 88;if(v<100)return 70;if(v<160)return 45;if(v<250)return 25;return 10;
 }
 function average(vals){const a=vals.filter(finite).map(Number);return a.length?a.reduce((x,y)=>x+y,0)/a.length:null}
+function sectionScore(vals,loneCap=75){
+ const a=vals.filter(finite).map(Number);if(!a.length)return null;
+ const result=a.reduce((x,y)=>x+y,0)/a.length;
+ return a.length===1?Math.min(result,loneCap):result;
+}
+function dailyMoveScore(v){
+ if(!finite(v))return null;const a=Math.abs(Number(v));
+ if(a<=3)return 100;if(a<=7)return 85;if(a<=12)return 65;if(a<=15)return 45;if(a<=25)return 20;return 10;
+}
 async function fetchTimeout(url,opts={},ms=14000){
  const c=new AbortController(),t=setTimeout(()=>c.abort(),ms);
  try{const r=await fetch(url,{...opts,signal:c.signal,cache:"no-store"});if(!r.ok)throw Error(`HTTP ${r.status}`);return await r.json()}
@@ -356,6 +365,15 @@ function compute(){
  const currentRatio=first(m.currentRatioQuarterly,m.currentRatioAnnual);
  const debtEquity=first(m.totalDebtToEquityQuarterly,m.totalDebtToEquityAnnual);
  const fcf=first(raw(s.financialData?.freeCashflow));
+ const operatingCashFlow=first(raw(s.financialData?.operatingCashflow));
+ const totalRevenue=firstPositive(raw(s.financialData?.totalRevenue));
+ const yahooMarketCap=firstPositive(raw(s.price?.marketCap));
+ const fcfPerShare=first(m.freeCashFlowPerShareTTM);
+ const operatingCashFlowPerShare=first(m.operatingCashFlowPerShareTTM,m.cashFlowPerShareTTM);
+ const operatingCashFlowMargin=finite(operatingCashFlow)&&positive(totalRevenue)?operatingCashFlow/totalRevenue*100:null;
+ const fcfMargin=finite(fcf)&&positive(totalRevenue)?fcf/totalRevenue*100:null;
+ const fcfYield=finite(fcf)&&positive(yahooMarketCap)?fcf/yahooMarketCap*100:null;
+ const fcfPerShareYield=finite(fcfPerShare)&&positive(price)?fcfPerShare/price*100:null;
  const cash=first(raw(s.financialData?.totalCash));
  const debt=first(raw(s.financialData?.totalDebt));
  const target=firstPositive(raw(s.financialData?.targetMeanPrice));
@@ -370,7 +388,12 @@ function compute(){
  const growthInputs=[scoreLinear(revGrowth,-5,25),scoreLinear(epsGrowth,-10,30)];
  const profitabilityInputs=[scoreLinear(grossMargin,15,65),scoreLinear(operatingMargin,5,35),scoreLinear(netMargin,3,25),scoreLinear(roe,5,30)];
  const balanceInputs=[scoreLinear(currentRatio,.7,2.2),debtScore(debtEquity),finite(cash)&&finite(debt)&&debt>0?scoreLinear(cash/debt,.15,1.25):null];
- const cashflowInputs=[finite(fcf)?(fcf>0?80:fcf===0?40:20):null,scoreLinear(m.freeCashFlowPerShareTTM,-1,8)];
+ // Cash flow must be scaled to the business or stock price. A positive raw dollar
+ // amount by itself is not evidence of strong cash generation.
+ const cashflowInputs=[
+   average([scoreLinear(operatingCashFlowMargin,-2,20),scoreLinear(fcfMargin,-5,15)]),
+   average([scoreLinear(fcfYield,-2,8),scoreLinear(fcfPerShareYield,-2,8)])
+ ];
  const analystInputs=[scoreLinear(analystUpside,-15,25),recommendationScore()];
  const momentumInputs=[
    finite(belowHigh)?(Math.abs(belowHigh)>=8&&Math.abs(belowHigh)<=25?85:Math.abs(belowHigh)<8?60:Math.abs(belowHigh)<=40?55:25):null,
@@ -385,22 +408,25 @@ function compute(){
  const riskInputs=[
    scoreLinear(beta,2.1,.65),
    finite(debtEquity)?debtScore(debtEquity):null,
-   finite(belowHigh)?(belowHigh<-40?25:75):null
+   finite(belowHigh)?(belowHigh<-40?25:75):null,
+   dailyMoveScore(q.dp)
  ];
  const inputs={valuation:valuationInputs,growth:growthInputs,profitability:profitabilityInputs,balance:balanceInputs,cashflow:cashflowInputs,analyst:analystInputs,momentum:momentumInputs,dividend:dividendInputs,risk:riskInputs};
- const scores=Object.fromEntries(Object.entries(inputs).map(([key,values])=>[key,average(values)]));
+ const loneCaps={valuation:85,growth:75,profitability:75,balance:75,cashflow:60,analyst:80,momentum:80,dividend:75,risk:80};
+ const scores=Object.fromEntries(Object.entries(inputs).map(([key,values])=>[key,sectionScore(values,loneCaps[key])]));
  const allocation=scoreAllocation(scores);
- const evidenceValues=[inputs.valuation,inputs.growth,inputs.profitability,inputs.balance,inputs.cashflow,inputs.analyst,inputs.momentum,[inputs.risk[0]]].flat();
+ const evidenceValues=[inputs.valuation,inputs.growth,inputs.profitability,inputs.balance,inputs.cashflow,inputs.analyst,inputs.momentum,[inputs.risk[0],inputs.risk[3]]].flat();
  const evidenceAvailable=evidenceValues.filter(finite).length;
  const evidenceTotal=evidenceValues.length;
  const confidence=clamp(evidenceAvailable/evidenceTotal*100);
- const overall=!fundLike(state.instrumentType)&&allocation.available>=60&&confidence>=55?allocation.total:null;
- state.scores=scores;state.evidence={available:evidenceAvailable,total:evidenceTotal};state.scoreCoverage=allocation.available;state.confidence=confidence;state.overall=overall;
+ const cashflowEvidence=cashflowInputs.filter(finite).length;
+ const overall=!fundLike(state.instrumentType)&&allocation.available>=70&&confidence>=60?allocation.total:null;
+ state.scores=scores;state.evidence={available:evidenceAvailable,total:evidenceTotal};state.cashflowEvidence=cashflowEvidence;state.scoreCoverage=allocation.available;state.confidence=confidence;state.overall=overall;
  const fairByPE=finite(price)&&finite(pe)&&pe>0?price*(clamp(pe,12,35)/pe):null;
  const fairByTarget=target;
  const fairEstimate=average([fairByPE,fairByTarget]);
  const marginOfSafety=finite(fairEstimate)&&finite(price)?(fairEstimate/price-1)*100:null;
- state.derived={price,pe,fpe,ps,pb,peg,revGrowth,epsGrowth,grossMargin,operatingMargin,netMargin,roe,currentRatio,debtEquity,fcf,cash,debt,target,analystUpside,beta,high52,low52,belowHigh,aboveLow,dividendYield,payoutRatio,fairEstimate,marginOfSafety};
+ state.derived={price,pe,fpe,ps,pb,peg,revGrowth,epsGrowth,grossMargin,operatingMargin,netMargin,roe,currentRatio,debtEquity,fcf,operatingCashFlow,totalRevenue,fcfPerShare,operatingCashFlowPerShare,operatingCashFlowMargin,fcfMargin,fcfYield,fcfPerShareYield,cash,debt,target,analystUpside,beta,high52,low52,belowHigh,aboveLow,dividendYield,payoutRatio,fairEstimate,marginOfSafety,dayChange:first(q.dp)};
  state.verdict=verdict(overall,confidence,allocation.available,state.instrumentType);
 }
 function recommendationScore(){
@@ -410,7 +436,11 @@ function recommendationScore(){
 }
 function verdict(score,confidence,coverage=100,instrumentType=""){
  if(fundLike(instrumentType))return"ETF / FUND — HOLDINGS REVIEW";
- if(!finite(score)||confidence<55||coverage<60)return"INSUFFICIENT DATA";
+ if(!finite(score)||confidence<60||coverage<70)return"INSUFFICIENT DATA";
+ if(confidence<70||state.cashflowEvidence<2)return"SPECULATIVE WATCH — MORE DATA NEEDED";
+ const s=state.scores||{},dayMove=Math.abs(Number(state.quote?.dp));
+ if(finite(dayMove)&&dayMove>=15&&score>=75)return"WAIT / HIGH VOLATILITY";
+ if(score>=75&&((finite(s.valuation)&&s.valuation<40)||(finite(s.cashflow)&&s.cashflow<40)||(finite(s.balance)&&s.balance<45)||(finite(s.profitability)&&s.profitability<40)||(finite(s.risk)&&s.risk<40)))return"WATCH / HIGH RISK";
  if(score>=90)return"STRONG BUY CANDIDATE";
  if(score>=75)return"BUY CANDIDATE";
  if(score>=60)return"HOLD / WATCH";
@@ -429,11 +459,15 @@ function buildNarrative(){
  if(finite(d.pe)&&d.pe>60)bad.push(`the trailing P/E is high at about ${fmt(d.pe,1)}`);
  if(finite(d.revGrowth)&&d.revGrowth<0)bad.push("revenue growth is negative");
  if(finite(d.debtEquity)&&d.debtEquity>160)bad.push("debt is elevated relative to equity");
+ if(finite(s.valuation)&&s.valuation<40)bad.push("valuation is stretched relative to the available fundamentals");
+ if(finite(d.ps)&&d.ps>12)bad.push(`price-to-sales is very high at about ${fmt(d.ps,1)}`);
+ if(state.cashflowEvidence<2)bad.push("cash-flow evidence is incomplete");
+ if(finite(state.quote?.dp)&&Math.abs(state.quote.dp)>=15)bad.push(`the stock moved ${fmt(Math.abs(state.quote.dp),1)}% in one day, creating event-driven volatility`);
  if(finite(d.belowHigh)&&d.belowHigh<-40)bad.push("the price decline may represent a breakdown, not merely a bargain");
  if(!good.length)good.push("the available measurements are mixed");
- if(!bad.length)bad.push("no major quantitative warning was detected in the available fields");
+ if(!bad.length)bad.push("the free-data feed remains incomplete and the score is not a substitute for reviewing the latest filing");
  const scoredSections=scoreAllocation(state.scores).parts.filter(p=>finite(p.score)).length;
- return `The X-Ray rates ${safe(state.name)} as <b>${state.verdict}</b>. The main positives are that ${good.join(", ")}. The main caution is that ${bad.join(", ")}. This conclusion uses ${state.evidence.available} of ${state.evidence.total} underlying measurements across ${scoredSections} of 8 weighted sections, so data completeness is ${fmt(state.confidence,0)}%.`;
+ return `The X-Ray rates ${safe(state.name)} as <b>${state.verdict}</b>. The main positives are that ${good.join(", ")}. The main cautions are that ${bad.join(", ")}. This conclusion uses ${state.evidence.available} of ${state.evidence.total} underlying measurements across ${scoredSections} of 8 weighted sections, so data completeness is ${fmt(state.confidence,0)}%.`;
 }
 function strengthsRisks(){
  const d=state.derived,s=state.scores,strengths=[],risks=[];
@@ -441,6 +475,8 @@ function strengthsRisks(){
  if(s.balance>=70)strengths.push("Solid balance sheet");if(s.cashflow>=70)strengths.push("Positive cash flow");
  if(s.valuation>=70)strengths.push("Acceptable valuation");if(s.analyst>=70)strengths.push("Supportive analyst view");
  if(finite(d.pe)&&d.pe>50)risks.push("High P/E");if(finite(d.debtEquity)&&d.debtEquity>120)risks.push("Elevated debt");
+ if(finite(d.ps)&&d.ps>12)risks.push("Very high price / sales");if(state.cashflowEvidence<2)risks.push("Cash-flow evidence incomplete");
+ if(finite(state.quote?.dp)&&Math.abs(state.quote.dp)>=15)risks.push("Extreme one-day volatility");
  if(finite(d.revGrowth)&&d.revGrowth<0)risks.push("Revenue contraction");if(finite(d.epsGrowth)&&d.epsGrowth<0)risks.push("Earnings contraction");
  if(finite(d.beta)&&d.beta>1.5)risks.push("High volatility");if(finite(d.belowHigh)&&d.belowHigh<-35)risks.push("Possible price breakdown");
  if(!strengths.length)strengths.push("No strong signal from available data");if(!risks.length)risks.push("No major quantitative warning found");
@@ -473,17 +509,24 @@ function bullBearText(){
  if(finite(d.belowHigh)&&d.belowHigh<=-10&&d.belowHigh>=-30)bull.push("The stock is below its yearly high without automatically looking broken.");
 
  if(finite(d.pe)&&d.pe>45)bear.push(`The P/E of about ${fmt(d.pe,1)} leaves less room for disappointment.`);
+ if(finite(d.ps)&&d.ps>12)bear.push(`The price-to-sales ratio of about ${fmt(d.ps,1)} requires unusually strong future execution.`);
  if(finite(d.revGrowth)&&d.revGrowth<8)bear.push("Revenue growth is modest or negative.");
  if(finite(d.epsGrowth)&&d.epsGrowth<8)bear.push("Earnings growth is not strong enough to remove valuation risk.");
  if(finite(d.debtEquity)&&d.debtEquity>120)bear.push("Debt is elevated relative to equity.");
  if(finite(d.beta)&&d.beta>1.4)bear.push("The stock can be substantially more volatile than the market.");
+ if(state.cashflowEvidence<2)bear.push("Cash-flow evidence is incomplete, so earnings quality cannot be confirmed.");
+ if(finite(state.quote?.dp)&&Math.abs(state.quote.dp)>=15)bear.push(`A ${fmt(Math.abs(state.quote.dp),1)}% one-day move raises the risk of chasing an earnings or news reaction.`);
  if(finite(d.belowHigh)&&d.belowHigh<-35)bear.push("The large decline could reflect a damaged outlook rather than a routine pullback.");
  if(state.news.length===0)bear.push("Recent company-news coverage was unavailable, reducing confidence.");
 
  if(!bull.length)bull.push("The available data does not produce a strong bull case yet.");
  if(!bear.length)bear.push("No major quantitative red flag was found, but price and execution risk remain.");
- const conclusion = state.verdict==="INSUFFICIENT DATA"
+ const conclusion = state.verdict==="INSUFFICIENT DATA"||state.verdict.includes("MORE DATA")
    ? "The available data is too incomplete for a reliable investment conclusion. Verify the missing fundamentals before comparing, buying, holding or avoiding this stock."
+   : state.verdict==="WAIT / HIGH VOLATILITY"
+   ? "The underlying score may be favorable, but an extreme one-day move makes an immediate entry unusually price-sensitive. Let the earnings or news reaction settle and verify the new information first."
+   : state.verdict==="WATCH / HIGH RISK"
+   ? "The total score is being overridden by a critical weak area. Treat this as a watchlist or research candidate, not an automatic purchase."
    : state.overall>=72
    ? `The evidence leans positive, but the best action is still price-sensitive. ${finite(d.pe)&&d.pe>40?"The company may be attractive while the entry price is only fair.":"The current mix of quality, growth and valuation is reasonably favorable."}`
    : state.overall>=58
@@ -499,6 +542,10 @@ function changedText(){
  if(finite(d.epsGrowth))items.push(`EPS growth currently measures about ${pct(d.epsGrowth)}.`);
  if(finite(d.grossMargin))items.push(`Gross margin is about ${fmt(d.grossMargin,1)}%.`);
  if(finite(d.operatingMargin))items.push(`Operating margin is about ${fmt(d.operatingMargin,1)}%.`);
+ if(finite(d.operatingCashFlow))items.push(`Trailing operating cash flow is ${compactMoney(d.operatingCashFlow)}.`);
+ if(finite(d.fcf))items.push(`Trailing free cash flow is ${compactMoney(d.fcf)}.`);
+ if(finite(d.fcfMargin))items.push(`Free-cash-flow margin is about ${pct(d.fcfMargin)}.`);
+ if(finite(d.fcfYield))items.push(`Free-cash-flow yield is about ${pct(d.fcfYield)}.`);
  if(finite(d.target))items.push(`The mean analyst target is ${money(d.target)}, implying ${pct(d.analystUpside)} from the current price.`);
  if(state.news.length){
    const recent=state.news.slice(0,4).map(x=>x.headline).filter(Boolean);
@@ -510,14 +557,14 @@ function changedText(){
 function snapshot(){
  return {
    symbol:state.symbol,name:state.name,instrumentType:state.instrumentType,overall:state.overall,verdict:state.verdict,
-   scoreCoverage:state.scoreCoverage,confidence:state.confidence,evidence:{...state.evidence},scores:{...state.scores},derived:{...state.derived}
+   scoreCoverage:state.scoreCoverage,confidence:state.confidence,cashflowEvidence:state.cashflowEvidence,evidence:{...state.evidence},scores:{...state.scores},derived:{...state.derived}
  };
 }
 async function analyzeSymbolForCompare(symbol){
  const old={
   symbol:state.symbol,name:state.name,instrumentType:state.instrumentType,quote:state.quote,profile:state.profile,metrics:state.metrics,
   summary:state.summary,lookup:state.lookup,chart:state.chart,recommendations:state.recommendations,news:state.news,scores:state.scores,
-  evidence:state.evidence,scoreCoverage:state.scoreCoverage,confidence:state.confidence,overall:state.overall,verdict:state.verdict,derived:state.derived
+  evidence:state.evidence,cashflowEvidence:state.cashflowEvidence,scoreCoverage:state.scoreCoverage,confidence:state.confidence,overall:state.overall,verdict:state.verdict,derived:state.derived
  };
  try{
    state.symbol=symbol;
@@ -533,7 +580,7 @@ function renderCompare(a,b){
  $("compareSection").hidden=false;
  $("cmpA").textContent=a.symbol;$("cmpB").textContent=b.symbol;
  const bothStocks=!fundLike(a.instrumentType)&&!fundLike(b.instrumentType);
- const reliable=bothStocks&&a.confidence>=55&&b.confidence>=55&&a.scoreCoverage>=60&&b.scoreCoverage>=60;
+ const reliable=bothStocks&&a.confidence>=70&&b.confidence>=70&&a.cashflowEvidence>=2&&b.cashflowEvidence>=2&&a.scoreCoverage>=70&&b.scoreCoverage>=70;
  const rows=[
   ["Overall score",a.overall,b.overall],
   ["Valuation",a.scores.valuation,b.scores.valuation],
@@ -574,7 +621,7 @@ function buffettLens(){
  if(fundLike(state.instrumentType))return `<b>Fund rather than operating company:</b> A Buffett-style company analysis is not appropriate for ${safe(state.name)}. Review what the fund owns, what it charges, how concentrated it is, how closely it tracks its benchmark, and whether you already own the same underlying companies elsewhere.`;
  const quality=!finite(s.profitability)?"business quality could not be measured from the available margins and returns":s.profitability>=70?"economically strong based on the available margins and returns":"mixed in business quality based on the available margins and returns";
  const durability=!finite(s.balance)?"Balance-sheet data is incomplete.":s.balance>=70?"The balance sheet appears resilient.":s.balance>=50?"The balance sheet is acceptable but deserves review.":"Financial strength is a concern.";
- const ownerEarnings=!finite(s.cashflow)?"Cash-flow data is incomplete.":s.cashflow>=70?"Cash generation is supportive.":s.cashflow>=50?"Cash generation is adequate.":"Cash-flow quality is weak.";
+ const ownerEarnings=state.cashflowEvidence<2?"Cash-flow evidence is incomplete, so owner earnings cannot be confirmed.":s.cashflow>=70?"Cash generation is supportive.":s.cashflow>=50?"Cash generation is adequate.":"Cash-flow quality is weak.";
  const priceQuality=!finite(s.valuation)?"Valuation data is incomplete.":s.valuation>=70?"The valuation is reasonable relative to the available fundamentals.":s.valuation>=50?"The valuation is not obviously cheap.":"The valuation leaves little margin for error.";
  parts.push(`<b>What the business looks like:</b> ${safe(state.name)} appears ${quality}.`);
  parts.push(`<b>Financial durability:</b> ${durability}`);
@@ -612,7 +659,7 @@ function scoreAllocation(s){
 }
 function hundredPointBreakdown(){
  const result=scoreAllocation(state.scores);
- const publishable=!fundLike(state.instrumentType)&&result.available>=60&&state.confidence>=55;
+ const publishable=!fundLike(state.instrumentType)&&result.available>=70&&state.confidence>=60;
  return publishable?result:{...result,total:null};
 }
 function hundredVerdict(score,coverage,confidence){
@@ -627,7 +674,7 @@ function render(){
  $("price").textContent=money(d.price);
  $("change").textContent=finite(q.dp)?`${pct(q.dp)}${finite(q.d)?` • ${q.d>=0?"+":""}${money(q.d)}`:""}`:"Price change unavailable";
  $("change").className="change "+(q.dp>0?"pos":q.dp<0?"neg":"flat");
- $("verdict").textContent=state.verdict;$("confidence").textContent=`Data completeness ${fmt(state.confidence,0)}% • Score coverage ${state.scoreCoverage}/100 • Updated ${new Date().toLocaleString()}`;
+ $("verdict").textContent=state.verdict;$("confidence").textContent=`Data completeness ${fmt(state.confidence,0)}% • Cash-flow checks ${state.cashflowEvidence}/2 • Score coverage ${state.scoreCoverage}/100 • Updated ${new Date().toLocaleString()}`;
  $("score").textContent=finite(state.overall)?fmt(state.overall,0):"—";$("scoreRing").style.setProperty("--score",finite(state.overall)?state.overall:0);
  $("explain").innerHTML=buildNarrative();
  const pills=[];
@@ -651,7 +698,8 @@ function render(){
  ].join("");
  $("balance").innerHTML=[
    metric("Current ratio",fmt(d.currentRatio,2)),metric("Debt / equity",finite(d.debtEquity)?fmt(d.debtEquity,1)+"%":"—"),metric("Cash",compactMoney(d.cash)),metric("Debt",compactMoney(d.debt)),
-   metric("Free cash flow",compactMoney(d.fcf)),metric("FCF / share",money(state.metrics.freeCashFlowPerShareTTM)),metric("Market cap",compactMoney(first(state.profile.marketCapitalization?state.profile.marketCapitalization*1e6:null,raw(state.summary.price?.marketCap)))),metric("Dividend yield",pct(d.dividendYield)),metric("Payout ratio",pct(d.payoutRatio))
+   metric("Operating cash flow",compactMoney(d.operatingCashFlow)),metric("Free cash flow",compactMoney(d.fcf)),metric("OCF margin",pct(d.operatingCashFlowMargin)),metric("FCF margin",pct(d.fcfMargin)),
+   metric("FCF yield",pct(d.fcfYield)),metric("FCF / share",money(d.fcfPerShare)),metric("Operating CF / share",money(d.operatingCashFlowPerShare)),metric("Market cap",compactMoney(first(state.profile.marketCapitalization?state.profile.marketCapitalization*1e6:null,raw(state.summary.price?.marketCap)))),metric("Dividend yield",pct(d.dividendYield)),metric("Payout ratio",pct(d.payoutRatio))
  ].join("");
  const r=state.recommendations[0]||{};
  $("analysts").innerHTML=[
@@ -683,7 +731,7 @@ function render(){
  ]:[
    decisionScoreCard("Overall",state.overall),
    decisionScoreCard("Value",state.scores.valuation),
-   decisionScoreCard("Quality",average([state.scores.profitability,state.scores.balance,state.scores.cashflow])),
+   decisionScoreCard("Quality",state.cashflowEvidence>=2?average([state.scores.profitability,state.scores.balance,state.scores.cashflow]):null),
    decisionScoreCard("Risk control",state.scores.risk)
  ]).join("");
  $("marginSafety").innerHTML=marginSafetyText();
@@ -694,8 +742,8 @@ function render(){
  $("hundredConfidence").textContent=isFund
    ? `Stock-style total withheld • ${state.evidence.available}/${state.evidence.total} company measurements returned`
    : finite(h.total)
-   ? `Data coverage ${h.available}/100 weighted points • ${state.evidence.available}/${state.evidence.total} underlying measurements${h.available<100?" • normalized across available sections":""}`
-   : `Data coverage ${h.available}/100 weighted points • ${state.evidence.available}/${state.evidence.total} underlying measurements • total withheld until coverage is sufficient`;
+   ? `Data coverage ${h.available}/100 weighted points • ${state.evidence.available}/${state.evidence.total} underlying measurements • cash-flow checks ${state.cashflowEvidence}/2${h.available<100?" • normalized across available sections":""}`
+   : `Data coverage ${h.available}/100 weighted points • ${state.evidence.available}/${state.evidence.total} underlying measurements • cash-flow checks ${state.cashflowEvidence}/2 • total withheld until coverage is sufficient`;
  $("hundredRing").style.setProperty("--score",finite(h.total)?h.total:0);
  $("hundredBreakdown").innerHTML=isFund?`<div class="empty">Use a holdings, fees, diversification and liquidity review for this fund.</div>`:h.parts.map(p=>{
    const shown=finite(p.points)?fmt(p.points,1):"—";
@@ -712,8 +760,8 @@ function render(){
  $("finnhubBtn").onclick=()=>open(`https://finnhub.io/stock/${sym}`,"_blank");
 }
 function compactMoney(v){
- if(!finite(v))return"—";const a=Math.abs(v);
- if(a>=1e12)return `$${fmt(v/1e12,2)}T`;if(a>=1e9)return `$${fmt(v/1e9,2)}B`;if(a>=1e6)return `$${fmt(v/1e6,2)}M`;return money(v,0);
+ if(!finite(v))return"—";const n=Number(v),a=Math.abs(n),sign=n<0?"-":"";
+ if(a>=1e12)return `${sign}$${fmt(a/1e12,2)}T`;if(a>=1e9)return `${sign}$${fmt(a/1e9,2)}B`;if(a>=1e6)return `${sign}$${fmt(a/1e6,2)}M`;return money(n,0);
 }
 const normalizeSymbol=value=>String(value??"").trim().toUpperCase().replace(/\s/g,"");
 const validSymbol=symbol=>/^[A-Z0-9][A-Z0-9.-]{0,14}$/.test(symbol);
