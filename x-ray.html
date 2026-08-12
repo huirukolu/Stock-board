@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#07090c">
 <meta name="description" content="Steve's Stock X-Ray — valuation, fundamentals, news, analyst ratings and an explained research score.">
-<title>Steve's Stock X-Ray 4.3</title>
+<title>Steve's Stock X-Ray 4.4</title>
 <style>
 :root{
   --bg:#07090c;--panel:#11161d;--panel2:#171e27;--text:#f5f7fa;--muted:#9ba8b7;
@@ -70,7 +70,7 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
 </head>
 <body>
 <header>
-  <div class="headerline"><div><h1>Steve's Stock X-Ray 4.3</h1><div class="sub">Deep research laboratory — original Stock Board remains untouched — coverage-aware 100-point rating</div></div><button id="backBtn">Board</button></div>
+  <div class="headerline"><div><h1>Steve's Stock X-Ray 4.4</h1><div class="sub">Deep research laboratory — original Stock Board remains untouched — coverage-aware 100-point rating</div></div><button id="backBtn">Board</button></div>
 </header>
 <main>
   <div class="searchbar">
@@ -143,6 +143,7 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
     <section class="card">
       <h2>Balance sheet & cash flow</h2>
       <div id="balance" class="metrics"></div>
+      <div id="cashflowSource" class="note" style="margin-top:10px"></div>
     </section>
 
     <section class="card span2">
@@ -291,7 +292,11 @@ function dailyMoveScore(v){
 }
 async function fetchTimeout(url,opts={},ms=14000){
  const c=new AbortController(),t=setTimeout(()=>c.abort(),ms);
- try{const r=await fetch(url,{...opts,signal:c.signal,cache:"no-store"});if(!r.ok)throw Error(`HTTP ${r.status}`);return await r.json()}
+ try{
+  const r=await fetch(url,{...opts,signal:c.signal,cache:"no-store"});
+  if(!r.ok){const error=Error(`HTTP ${r.status}`);error.status=r.status;throw error}
+  return await r.json();
+ }
  finally{clearTimeout(t)}
 }
 function yahooUrls(path){
@@ -346,7 +351,19 @@ async function loadAll(symbol){
    Object.keys(state.chart).length>0
  ].filter(Boolean).length;
  const hasCoreData=positive(state.quote.c)||positive(raw(state.summary.price?.regularMarketPrice))||positive(state.chart?.meta?.regularMarketPrice)||Boolean(state.profile.name)||Boolean(lookupMatch)||Object.values(state.metrics).some(finite);
- return {responded,usable,total:r.length,hasCoreData,errors:r.filter(x=>x.status==="rejected").map(x=>String(x.reason?.message||x.reason))};
+ const finnhubResults=[r[0],r[1],r[2],r[3],r[4],r[6]];
+ const finnhubErrors=finnhubResults
+   .filter(x=>x.status==="rejected")
+   .map(x=>({status:Number(x.reason?.status)||null,message:String(x.reason?.message||x.reason)}));
+ return {responded,usable,total:r.length,hasCoreData,hasFinnhubKey:Boolean(key),finnhubErrors,errors:r.filter(x=>x.status==="rejected").map(x=>String(x.reason?.message||x.reason))};
+}
+function finnhubIssue(result){
+ if(!result.hasFinnhubKey)return"Finnhub key missing — live quote, ratings and news may be unavailable.";
+ const statuses=result.finnhubErrors.map(x=>x.status);
+ if(statuses.includes(401))return"Finnhub rejected the saved key (401). Recheck or replace the key in Data access.";
+ if(statuses.includes(403))return"Finnhub denied this request (403). The saved key or plan may not allow that data.";
+ if(statuses.includes(429))return"Finnhub rate limit reached (429). Wait a little before running another X-Ray.";
+ return"";
 }
 function compute(){
  const q=state.quote,m=state.metrics,s=state.summary;
@@ -364,16 +381,19 @@ function compute(){
  const roe=first(m.roeTTM,m.roeRfy);
  const currentRatio=first(m.currentRatioQuarterly,m.currentRatioAnnual);
  const debtEquity=first(m.totalDebtToEquityQuarterly,m.totalDebtToEquityAnnual);
- const fcf=first(raw(s.financialData?.freeCashflow));
+ // Yahoo financialData supplies company totals in actual dollars. Its
+ // freeCashflow field is specifically levered free cash flow. Do not substitute
+ // Finnhub's thousands-based statement metrics or per-share fields here.
+ const leveredFreeCashFlow=first(raw(s.financialData?.freeCashflow));
  const operatingCashFlow=first(raw(s.financialData?.operatingCashflow));
  const totalRevenue=firstPositive(raw(s.financialData?.totalRevenue));
  const yahooMarketCap=firstPositive(raw(s.price?.marketCap));
- const fcfPerShare=first(m.freeCashFlowPerShareTTM);
+ const freeCashFlowPerShare=first(m.freeCashFlowPerShareTTM);
  const operatingCashFlowPerShare=first(m.operatingCashFlowPerShareTTM,m.cashFlowPerShareTTM);
  const operatingCashFlowMargin=finite(operatingCashFlow)&&positive(totalRevenue)?operatingCashFlow/totalRevenue*100:null;
- const fcfMargin=finite(fcf)&&positive(totalRevenue)?fcf/totalRevenue*100:null;
- const fcfYield=finite(fcf)&&positive(yahooMarketCap)?fcf/yahooMarketCap*100:null;
- const fcfPerShareYield=finite(fcfPerShare)&&positive(price)?fcfPerShare/price*100:null;
+ const leveredFcfMargin=finite(leveredFreeCashFlow)&&positive(totalRevenue)?leveredFreeCashFlow/totalRevenue*100:null;
+ const leveredFcfYield=finite(leveredFreeCashFlow)&&positive(yahooMarketCap)?leveredFreeCashFlow/yahooMarketCap*100:null;
+ const freeCashFlowPerShareYield=finite(freeCashFlowPerShare)&&positive(price)?freeCashFlowPerShare/price*100:null;
  const cash=first(raw(s.financialData?.totalCash));
  const debt=first(raw(s.financialData?.totalDebt));
  const target=firstPositive(raw(s.financialData?.targetMeanPrice));
@@ -391,8 +411,8 @@ function compute(){
  // Cash flow must be scaled to the business or stock price. A positive raw dollar
  // amount by itself is not evidence of strong cash generation.
  const cashflowInputs=[
-   average([scoreLinear(operatingCashFlowMargin,-2,20),scoreLinear(fcfMargin,-5,15)]),
-   average([scoreLinear(fcfYield,-2,8),scoreLinear(fcfPerShareYield,-2,8)])
+   average([scoreLinear(operatingCashFlowMargin,-2,20),scoreLinear(leveredFcfMargin,-5,15)]),
+   average([scoreLinear(leveredFcfYield,-2,8),scoreLinear(freeCashFlowPerShareYield,-2,8)])
  ];
  const analystInputs=[scoreLinear(analystUpside,-15,25),recommendationScore()];
  const momentumInputs=[
@@ -426,7 +446,7 @@ function compute(){
  const fairByTarget=target;
  const fairEstimate=average([fairByPE,fairByTarget]);
  const marginOfSafety=finite(fairEstimate)&&finite(price)?(fairEstimate/price-1)*100:null;
- state.derived={price,pe,fpe,ps,pb,peg,revGrowth,epsGrowth,grossMargin,operatingMargin,netMargin,roe,currentRatio,debtEquity,fcf,operatingCashFlow,totalRevenue,fcfPerShare,operatingCashFlowPerShare,operatingCashFlowMargin,fcfMargin,fcfYield,fcfPerShareYield,cash,debt,target,analystUpside,beta,high52,low52,belowHigh,aboveLow,dividendYield,payoutRatio,fairEstimate,marginOfSafety,dayChange:first(q.dp)};
+ state.derived={price,pe,fpe,ps,pb,peg,revGrowth,epsGrowth,grossMargin,operatingMargin,netMargin,roe,currentRatio,debtEquity,leveredFreeCashFlow,operatingCashFlow,totalRevenue,freeCashFlowPerShare,operatingCashFlowPerShare,operatingCashFlowMargin,leveredFcfMargin,leveredFcfYield,freeCashFlowPerShareYield,cash,debt,target,analystUpside,beta,high52,low52,belowHigh,aboveLow,dividendYield,payoutRatio,fairEstimate,marginOfSafety,dayChange:first(q.dp)};
  state.verdict=verdict(overall,confidence,allocation.available,state.instrumentType);
 }
 function recommendationScore(){
@@ -543,9 +563,9 @@ function changedText(){
  if(finite(d.grossMargin))items.push(`Gross margin is about ${fmt(d.grossMargin,1)}%.`);
  if(finite(d.operatingMargin))items.push(`Operating margin is about ${fmt(d.operatingMargin,1)}%.`);
  if(finite(d.operatingCashFlow))items.push(`Trailing operating cash flow is ${compactMoney(d.operatingCashFlow)}.`);
- if(finite(d.fcf))items.push(`Trailing free cash flow is ${compactMoney(d.fcf)}.`);
- if(finite(d.fcfMargin))items.push(`Free-cash-flow margin is about ${pct(d.fcfMargin)}.`);
- if(finite(d.fcfYield))items.push(`Free-cash-flow yield is about ${pct(d.fcfYield)}.`);
+ if(finite(d.leveredFreeCashFlow))items.push(`Trailing levered free cash flow is ${compactMoney(d.leveredFreeCashFlow)}.`);
+ if(finite(d.leveredFcfMargin))items.push(`Levered free-cash-flow margin is about ${pct(d.leveredFcfMargin)}.`);
+ if(finite(d.leveredFcfYield))items.push(`Levered free-cash-flow yield is about ${pct(d.leveredFcfYield)}.`);
  if(finite(d.target))items.push(`The mean analyst target is ${money(d.target)}, implying ${pct(d.analystUpside)} from the current price.`);
  if(state.news.length){
    const recent=state.news.slice(0,4).map(x=>x.headline).filter(Boolean);
@@ -698,9 +718,10 @@ function render(){
  ].join("");
  $("balance").innerHTML=[
    metric("Current ratio",fmt(d.currentRatio,2)),metric("Debt / equity",finite(d.debtEquity)?fmt(d.debtEquity,1)+"%":"—"),metric("Cash",compactMoney(d.cash)),metric("Debt",compactMoney(d.debt)),
-   metric("Operating cash flow",compactMoney(d.operatingCashFlow)),metric("Free cash flow",compactMoney(d.fcf)),metric("OCF margin",pct(d.operatingCashFlowMargin)),metric("FCF margin",pct(d.fcfMargin)),
-   metric("FCF yield",pct(d.fcfYield)),metric("FCF / share",money(d.fcfPerShare)),metric("Operating CF / share",money(d.operatingCashFlowPerShare)),metric("Market cap",compactMoney(first(state.profile.marketCapitalization?state.profile.marketCapitalization*1e6:null,raw(state.summary.price?.marketCap)))),metric("Dividend yield",pct(d.dividendYield)),metric("Payout ratio",pct(d.payoutRatio))
+   metric("Operating cash flow (TTM)",compactMoney(d.operatingCashFlow)),metric("Levered free cash flow (TTM)",compactMoney(d.leveredFreeCashFlow)),metric("OCF margin",pct(d.operatingCashFlowMargin)),metric("Levered FCF margin",pct(d.leveredFcfMargin)),
+   metric("Levered FCF yield",pct(d.leveredFcfYield)),metric("Free cash flow / share",money(d.freeCashFlowPerShare)),metric("Operating cash flow / share",money(d.operatingCashFlowPerShare)),metric("Market cap",compactMoney(first(state.profile.marketCapitalization?state.profile.marketCapitalization*1e6:null,raw(state.summary.price?.marketCap)))),metric("Dividend yield",pct(d.dividendYield)),metric("Payout ratio",pct(d.payoutRatio))
  ].join("");
+ $("cashflowSource").textContent="Company cash-flow totals are trailing Yahoo values in actual dollars. Per-share cash-flow figures come from Finnhub and stay separate; missing totals remain unavailable rather than being replaced by a differently scaled field.";
  const r=state.recommendations[0]||{};
  $("analysts").innerHTML=[
    metric("Target mean",money(d.target)),metric("Implied upside",pct(d.analystUpside)),metric("Strong buy",String(r.strongBuy??"—")),metric("Buy",String(r.buy??"—")),
@@ -773,10 +794,11 @@ async function analyze(){
  state.symbol=symbol;$("analyze").disabled=true;$("status").textContent=`Running X-Ray on ${symbol}… collecting quote, fundamentals, analyst ratings and news.`;
  try{
    const result=await loadAll(symbol);
-   if(!result.hasCoreData)throw Error(`No usable market data was returned for ${symbol}. Check the ticker and Finnhub key.`);
+   const feedIssue=finnhubIssue(result);
+   if(!result.hasCoreData)throw Error(feedIssue||`No usable market data was returned for ${symbol}. Check the ticker and Finnhub key.`);
    compute();render();
    const limited=result.usable<result.total?" Some free-data sections were unavailable.":"";
-   $("status").textContent=`X-Ray complete • ${result.usable}/${result.total} sections supplied usable data.${limited}`;
+   $("status").textContent=`X-Ray complete • ${result.usable}/${result.total} sections supplied usable data.${limited}${feedIssue?` ${feedIssue}`:""}`;
    history.replaceState(null,"",`?ticker=${encodeURIComponent(symbol)}`);
  }catch(e){
    Object.assign(state,previous);
