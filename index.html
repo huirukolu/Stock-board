@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#07090c">
 <meta name="description" content="Steve's Stock Board — live quotes, ranked opportunities, charts, alerts, and watchlist backup.">
-<title>Steve's Stock Board 5.8</title>
+<title>Steve's Stock Board 5.9</title>
 <style>
 :root{--bg:#07090c;--panel:#11161d;--panel2:#171e27;--text:#f5f7fa;--muted:#9ba8b7;--line:#29323e;--green:#21d765;--red:#ff6257;--blue:#67adff;--gold:#ffd166}
 *{box-sizing:border-box}
@@ -53,7 +53,7 @@ details{margin-top:16px;background:var(--panel);border:1px solid var(--line);bor
 </head>
 <body>
 <header>
-<div class="headerline"><h1>Steve's Stock Board 5.8</h1><span id="marketBadge" class="marketbadge">Checking market…</span></div>
+<div class="headerline"><h1>Steve's Stock Board 5.9</h1><span id="marketBadge" class="marketbadge">Checking market…</span></div>
 <div class="sub">Live quotes • ranked opportunities • Portfolio Center • tap any ticker for Stock X-Ray • charts • visual alerts</div>
 </header>
 <main>
@@ -62,8 +62,8 @@ details{margin-top:16px;background:var(--panel);border:1px solid var(--line);bor
 <select id="sort">
 <option value="opportunity" selected>Biggest opportunities</option><option value="dayDesc">Biggest gainers today</option><option value="dayAsc">Biggest losers today</option>
 <option value="dipDesc">Deepest below current-year high</option><option value="belowAvg">Furthest below current-year average</option>
-<option value="nearLow">Closest to 2026 low</option><option value="ytdDesc">Best 2026 gain</option>
-<option value="ytdAsc">Worst 2026 result</option><option value="symbol">Alphabetical</option>
+<option value="nearLow">Closest to current-year low</option><option value="ytdDesc">Best current-year gain</option>
+<option value="ytdAsc">Worst current-year result</option><option value="symbol">Alphabetical</option>
 </select>
 <button id="refresh" class="primary">Refresh</button><button id="stop">Stop</button>
 </div>
@@ -101,8 +101,8 @@ details{margin-top:16px;background:var(--panel);border:1px solid var(--line);bor
 <summary><span>Board tools & settings</span></summary>
 <div class="toolSection">
   <h3>Backup and restore</h3>
-  <div class="toolButtons"><button id="export">Backup board</button><button id="exportCSV">Export CSV</button><button id="import">Restore board</button><button id="reset" class="dangerTool">Restore base 28</button></div>
-  <div class="note toolHint">Use Backup board before making major changes. Restore base 28 resets the watchlist to the original starter list.</div>
+  <div class="toolButtons"><button id="export">Backup board</button><button id="exportCSV">Export CSV</button><button id="import">Restore board</button><button id="reset" class="dangerTool">Restore starter list</button></div>
+  <div class="note toolHint">Use Backup board before making major changes. Restore starter list resets the watchlist to the original stocks.</div>
 </div>
 <div class="toolSection">
   <h3>Free market-data settings</h3>
@@ -124,8 +124,8 @@ details{margin-top:16px;background:var(--panel);border:1px solid var(--line);bor
 </div>
 </details>
 <details class="versionDetails">
-<summary>What’s new in Version 5.8</summary>
-<div class="note" style="margin-top:10px">Fixes live-price percentage mismatches. During the regular market session, Finnhub’s live quote now remains authoritative after Yahoo history and chart data load, so the displayed price, day change, vs. average, below high, above low, yearly gain/loss, and range position are all calculated from the same current price.</div>
+<summary>What’s new in Version 5.9</summary>
+<div class="note" style="margin-top:10px">Fixes Board/X-Ray ranking so only stocks with an opportunity score receive a Board rank, and every rank uses the same rated-stock total. It also keeps Yahoo daily price changes authoritative after history loads, uses current-year wording throughout, and corrects the starter-list count automatically.</div>
 </details>
 </main>
 <div id="toastContainer" style="position:fixed;bottom:18px;right:12px;left:12px;z-index:9999;display:flex;flex-direction:column;gap:8px;max-width:380px;margin-left:auto;pointer-events:none"></div>
@@ -160,6 +160,7 @@ const ORIGINAL=[
 ["AMZN","Amazon"],
 ["SKHY","SK hynix ADR"],
 ["TEL","TE Connectivity"]];
+const BASE_LIST_COUNT=ORIGINAL.length;
 
 const QUALITY={
 VTI:88,TSM:94,QQQM:90,META:93,MU:88,TEL:87,NVDA:95,AVGO:94,GEV:84,APH:91,NVT:80,AMAT:91,SOXQ:84,TTE:76,ALGM:73,LRCX:91,RTX:84,RMBS:70,BYDDY:82,CEG:86,VST:82,VRT:84,CRDO:75,GLO:62,FN:86,MELI:91,PYPL:76,KLAC:93,FLEX:78,AMD:88,NBIS:68,MRVL:82,CMI:84,CAT:88,EQT:78,HWM:88,ET:78,ONTO:84,SKHY:89,RKLB:67,ETN:92,SNDK:74,HPE:73,IONQ:57,ZTS:88,WDC:76,DELL:80,CSCO:80,DUK:82,ANET:94
@@ -321,7 +322,7 @@ async function getExtended(symbol){
  const previousClose=Number.isFinite(m.chartPreviousClose)?m.chartPreviousClose:(Number.isFinite(m.previousClose)?m.previousClose:null);
  const dayDollar=Number.isFinite(regularPrice)&&Number.isFinite(previousClose)?regularPrice-previousClose:null;
  const dayPct=Number.isFinite(dayDollar)&&Number.isFinite(previousClose)&&previousClose!==0?dayDollar/previousClose*100:null;
- return{extendedPrice:Number.isFinite(ext)?ext:null,regularPrice:Number.isFinite(regularPrice)?regularPrice:null,price:Number.isFinite(regularPrice)?regularPrice:null,prev:previousClose,dayDollar,dayPct,extendedSession:session,extendedAt:Date.now(),extendedSource:"Yahoo daily/extended"};
+ return{extendedPrice:Number.isFinite(ext)?ext:null,regularPrice:Number.isFinite(regularPrice)?regularPrice:null,regularPrev:previousClose,regularDayDollar:dayDollar,regularDayPct:dayPct,price:Number.isFinite(regularPrice)?regularPrice:null,prev:previousClose,dayDollar,dayPct,extendedSession:session,extendedAt:Date.now(),extendedSource:"Yahoo daily/extended"};
 }
 async function getChart(symbol,range="3mo"){
  const y=yahooSymbol(symbol),interval=range==="1d"?"5m":"1d",path=`/v8/finance/chart/${encodeURIComponent(y)}?range=${range}&interval=${interval}&includePrePost=${range==="1d"?"true":"false"}&events=history`;
@@ -413,19 +414,29 @@ function boardDataConfidence(x){
  return{score,label,stale};
 }
 function label(x){if(!Number.isFinite(x.belowHigh))return"Year range unavailable";const d=Math.abs(x.belowHigh);return d<=3?`Near ${MARKET_YEAR} high`:d<=10?"Small pullback":d<=20?"Moderate pullback":"Deep pullback"}
+function withBoardRanks(rows){
+ const ranked=[...rows].filter(x=>Number.isFinite(x.opportunity)).sort((a,b)=>b.opportunity-a.opportunity||a.symbol.localeCompare(b.symbol));
+ const rankMap=new Map(ranked.map((x,i)=>[x.symbol,i+1]));
+ return rows.map(x=>({...x,opportunityRank:rankMap.get(x.symbol)??null,opportunityTotal:ranked.length}));
+}
 function allRows(baseRows){
  const q=$("search").value.trim().toLowerCase();let a=[...(baseRows||watch.map(w=>calculated({...w,...(data[w.symbol]||{})})))];
  if(q)a=a.filter(x=>x.symbol.toLowerCase().includes(q)||x.name.toLowerCase().includes(q));
  if(view==="opportunities")a=a.filter(x=>Number.isFinite(x.opportunity));if(view==="gainers")a=a.filter(x=>x.dayPct>0);if(view==="losers")a=a.filter(x=>x.dayPct<0);if(view==="dips")a=a.filter(x=>Number.isFinite(x.belowHigh));
  if(view==="belowAvg")a=a.filter(x=>Number.isFinite(x.vsAvg)&&x.vsAvg<0);if(view==="nearHigh")a=a.filter(x=>Number.isFinite(x.belowHigh)&&x.belowHigh>=-5);
  if(view==="alerts")a=a.filter(x=>Number.isFinite(x.alert?.below)||Number.isFinite(x.alert?.above));
- const sorters={opportunity:(a,b)=>(b.opportunity??-9999)-(a.opportunity??-9999),dayDesc:(a,b)=>(b.dayPct??-9999)-(a.dayPct??-9999),dayAsc:(a,b)=>(a.dayPct??9999)-(b.dayPct??9999),dipDesc:(a,b)=>(a.belowHigh??9999)-(b.belowHigh??9999),belowAvg:(a,b)=>(a.vsAvg??9999)-(b.vsAvg??9999),nearLow:(a,b)=>(a.aboveLow??9999)-(b.aboveLow??9999),ytdDesc:(a,b)=>(b.ytd??-9999)-(a.ytd??-9999),ytdAsc:(a,b)=>(a.ytd??9999)-(b.ytd??9999),symbol:(a,b)=>a.symbol.localeCompare(b.symbol)};
+ const sorters={opportunity:(a,b)=>(b.opportunity??-9999)-(a.opportunity??-9999)||a.symbol.localeCompare(b.symbol),dayDesc:(a,b)=>(b.dayPct??-9999)-(a.dayPct??-9999),dayAsc:(a,b)=>(a.dayPct??9999)-(b.dayPct??9999),dipDesc:(a,b)=>(a.belowHigh??9999)-(b.belowHigh??9999),belowAvg:(a,b)=>(a.vsAvg??9999)-(b.vsAvg??9999),nearLow:(a,b)=>(a.aboveLow??9999)-(b.aboveLow??9999),ytdDesc:(a,b)=>(b.ytd??-9999)-(a.ytd??-9999),ytdAsc:(a,b)=>(a.ytd??9999)-(b.ytd??9999),symbol:(a,b)=>a.symbol.localeCompare(b.symbol)};
  a.sort(sorters[$("sort").value]);
- if($("sort").value==="opportunity"||view==="opportunities")a=a.map((x,i)=>({...x,opportunityRank:i+1}));
  return a;
 }
 function mini(items){return items.length?items.slice(0,5).map(x=>`<div class="mini"><div><span class="ticker">${x.symbol}</span><div class="name">${x.name}</div></div><b class="${cls(x.dayPct)}">${pct(x.dayPct)}</b></div>`).join(""):'<div class="name">Waiting for data…</div>'}
 function alertText(x){const p=[];if(Number.isFinite(x.alert?.below))p.push(`At/below $${num(x.alert.below)}`);if(Number.isFinite(x.alert?.above))p.push(`At/above $${num(x.alert.above)}`);return p.length?`${x.hitLow?"⚠ Low alert reached • ":x.hitHigh?"✓ High alert reached • ":""}${p.join(" • ")}`:"No visual alert set"}
+function priceTimestampText(x){
+ if(x.priceSource==="Finnhub live"&&Number.isFinite(x.quoteAt))return` • Finnhub quote ${new Date(x.quoteAt).toLocaleTimeString()}`;
+ if(String(x.priceSource||"").startsWith("Yahoo daily")&&Number.isFinite(x.extendedAt))return` • Yahoo quote ${new Date(x.extendedAt).toLocaleTimeString()}`;
+ if(Number.isFinite(x.yearAt))return` • Cached/history ${new Date(x.yearAt).toLocaleDateString()}`;
+ return"";
+}
 function portfolioAction(x,gainPct){
  if(!Number.isFinite(x.price))return "WAIT — current price is unavailable.";
  if(Number.isFinite(x.opportunity)&&x.opportunity>=78&&gainPct<15)return "ADD / HOLD — strong Board opportunity and the position is not heavily extended.";
@@ -437,8 +448,9 @@ function portfolioAction(x,gainPct){
 
 function xrayHref(x){
  const q=new URLSearchParams({ticker:x.symbol});
- const rankedTotal=watch.map(w=>calculated({...w,...(data[w.symbol]||{})})).filter(v=>Number.isFinite(v.opportunity)).length;
- const fields={name:x.name,rank:x.opportunityRank,total:rankedTotal,score:x.opportunity,quality:x.quality,value:x.value,price:x.price,previousClose:x.prev,yearHigh:x.yearHigh,yearLow:x.yearLow,belowHigh:x.belowHigh,aboveLow:x.aboveLow,ytd:x.ytd,range:x.range};
+ const rankedTotal=Number.isFinite(x.opportunityTotal)?x.opportunityTotal:watch.map(w=>calculated({...w,...(data[w.symbol]||{})})).filter(v=>Number.isFinite(v.opportunity)).length;
+ const rank=Number.isFinite(x.opportunityRank)&&x.opportunityRank>=1&&x.opportunityRank<=rankedTotal?x.opportunityRank:null;
+ const fields={name:x.name,rank,total:rankedTotal,score:x.opportunity,boardScore:x.opportunity,quality:x.quality,value:x.value,price:x.price,previousClose:x.prev,yearHigh:x.yearHigh,yearLow:x.yearLow,belowHigh:x.belowHigh,aboveLow:x.aboveLow,ytd:x.ytd,range:x.range};
  for(const [k,v] of Object.entries(fields))if(v!==null&&v!==undefined&&v!==""&&(typeof v!=="number"||Number.isFinite(v)))q.set(k,String(v));
  return `x-ray.html?${q.toString()}`;
 }
@@ -471,12 +483,13 @@ function renderAttention(calculatedAll){
  const usable=calculatedAll.filter(x=>Number.isFinite(x.price)&&!boardDataConfidence(x).stale);
  const candidates=usable.filter(x=>x.hitLow||x.hitHigh||(Number.isFinite(x.opportunity)&&x.opportunity>=65)||(Number.isFinite(x.dayPct)&&Math.abs(x.dayPct)>=4)||x.oppWarnings?.length)
    .sort((a,b)=>attentionPriority(b)-attentionPriority(a)).slice(0,5);
- stamp.textContent=`Updated ${new Date().toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})}`;
+ const newest=Math.max(0,...calculatedAll.flatMap(x=>[Number(x.quoteAt)||0,Number(x.extendedAt)||0,Number(x.yearAt)||0]));
+ stamp.textContent=newest?`Data ${new Date(newest).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})}`:"Waiting for data";
  if(!candidates.length){
   grid.innerHTML='<div class="attentionEmpty"><b>Nothing urgent requires attention today.</b><br>The Board has not detected a strong opportunity, alert, unusually large move, or major caution from the available data.</div>';
   return;
  }
- grid.innerHTML=candidates.map((x,idx)=>{const[type,kind]=attentionType(x);return `<article class="attentionItem"><div class="attentionRank">${idx+1}</div><div><div class="attentionTicker">${x.symbol}<span class="attentionFlag ${kind}">${type}</span></div><div class="attentionWhy">${attentionReason(x)}</div></div><button class="attentionAction" onclick="location.href='${xrayHref({...x,opportunityRank:(calculatedAll.filter(v=>Number.isFinite(v.opportunity)).sort((a,b)=>b.opportunity-a.opportunity).findIndex(v=>v.symbol===x.symbol)+1)||null})}'">Open X-Ray</button></article>`}).join("");
+ grid.innerHTML=candidates.map((x,idx)=>{const[type,kind]=attentionType(x);return `<article class="attentionItem"><div class="attentionRank">${idx+1}</div><div><div class="attentionTicker">${x.symbol}<span class="attentionFlag ${kind}">${type}</span></div><div class="attentionWhy">${attentionReason(x)}</div></div><button class="attentionAction" onclick="location.href='${xrayHref(x)}'">Open X-Ray</button></article>`}).join("");
 }
 function renderPortfolio(calculatedAll){
  const rows=calculatedAll.filter(x=>holdings[x.symbol]&&Number(holdings[x.symbol].shares)>0);
@@ -531,9 +544,9 @@ function saveXrayContext(x,total){
 }
 function saveFullXrayCache(rows){
  try{
-  const ranked=[...rows].filter(v=>Number.isFinite(v.opportunity)).sort((a,b)=>b.opportunity-a.opportunity);
-  const rankMap=new Map(ranked.map((v,i)=>[v.symbol,i+1]));
-  const cache={version:2,savedAt:Date.now(),total:ranked.length||rows.length,stocks:{}};
+  const ranked=[...rows].filter(v=>Number.isFinite(v.opportunity)).sort((a,b)=>b.opportunity-a.opportunity||a.symbol.localeCompare(b.symbol));
+   const rankMap=new Map(ranked.map((v,i)=>[v.symbol,i+1]));
+  const cache={version:2,savedAt:Date.now(),total:ranked.length,stocks:{}};
   for(const x of rows){
    cache.stocks[x.symbol]={
     symbol:x.symbol,name:x.name,rank:rankMap.get(x.symbol)||null,total:cache.total,
@@ -549,31 +562,31 @@ function saveFullXrayCache(rows){
  }catch(e){console.warn("Could not save full Board cache",e)}
 }
 function render(){
- const calculatedAll=watch.map(w=>calculated({...w,...(data[w.symbol]||{})}));
+ const calculatedAll=withBoardRanks(watch.map(w=>calculated({...w,...(data[w.symbol]||{})})));
  saveFullXrayCache(calculatedAll);
  renderAttention(calculatedAll);
  const portfolioMode=view==="portfolio";$("portfolioCenter").hidden=!portfolioMode;$("list").hidden=portfolioMode;$("search").disabled=portfolioMode;$("sort").disabled=portfolioMode;$("portfolioCenter").style.display=portfolioMode?"block":"none";if(portfolioMode)renderPortfolio(calculatedAll);
  calculatedAll.forEach(x=>{const hit=x.hitLow||x.hitHigh;if(hit&&!alertedState[x.symbol]){alertedState[x.symbol]=true;showToast(`${x.symbol} price alert reached at ${Number.isFinite(x.price)?"$"+num(x.price):"the current price"}`,x.hitHigh?"success":"warning",6000);playAlertSound()}else if(!hit){alertedState[x.symbol]=false}});
  const all=calculatedAll.filter(x=>Number.isFinite(x.dayPct));
  $("gainers").innerHTML=mini([...all].sort((a,b)=>b.dayPct-a.dayPct));$("losers").innerHTML=mini([...all].sort((a,b)=>a.dayPct-b.dayPct));
- const rows=allRows(calculatedAll);$("list").innerHTML=rows.length?rows.map(x=>`
+ const rows=allRows(calculatedAll),showRanks=$("sort").value==="opportunity"||view==="opportunities";$("list").innerHTML=rows.length?rows.map(x=>`
  <article class="stock ${x.hitLow?"alert-low":""} ${x.hitHigh?"alert-high":""}">
- <div class="stock-top"><div><a class="xray-link" data-xray-symbol="${x.symbol}" href="${xrayHref(x)}"><div class="symbol">${Number.isFinite(x.opportunityRank)?`<span class="rankbadge">#${x.opportunityRank}</span>`:""}${x.symbol}</div><div class="company">${x.name}</div></a></div>
+ <div class="stock-top"><div><a class="xray-link" data-xray-symbol="${x.symbol}" href="${xrayHref(x)}"><div class="symbol">${showRanks&&Number.isFinite(x.opportunityRank)?`<span class="rankbadge">#${x.opportunityRank}</span>`:""}${x.symbol}</div><div class="company">${x.name}</div></a></div>
  <div><div class="price">${Number.isFinite(x.price)?"$"+num(x.price):"—"}</div><div class="day ${cls(x.dayPct)}">${pct(x.dayPct)}${Number.isFinite(x.dayDollar)?` • ${x.dayDollar>=0?"+":""}$${num(x.dayDollar)}`:""}</div>
  ${Number.isFinite(x.extendedPrice)&&["premarket","afterhours"].includes(x.extendedSession)?`<div class="extended">${x.extendedSession==="premarket"?"Pre":"After"}: $${num(x.extendedPrice)}${Number.isFinite(x.regularPrice)?` (${pct((x.extendedPrice/x.regularPrice-1)*100)})`:""}</div>`:""}</div></div>
  <div class="metrics">
- <div class="metric"><div class="label">2026 average</div><div class="value">${Number.isFinite(x.yearAvg)?"$"+num(x.yearAvg):"—"}</div></div>
+ <div class="metric"><div class="label">${MARKET_YEAR} average</div><div class="value">${Number.isFinite(x.yearAvg)?"$"+num(x.yearAvg):"—"}</div></div>
  <div class="metric"><div class="label">Vs. average</div><div class="value ${cls(x.vsAvg)}">${pct(x.vsAvg)}</div></div>
  <div class="metric"><div class="label">${MARKET_YEAR} high</div><div class="value">${Number.isFinite(x.yearHigh)?"$"+num(x.yearHigh):"—"}</div></div>
  <div class="metric"><div class="label">Below high</div><div class="value neg">${Number.isFinite(x.belowHigh)?num(Math.abs(x.belowHigh))+"%":"—"}</div></div>
- <div class="metric"><div class="label">2026 low</div><div class="value">${Number.isFinite(x.yearLow)?"$"+num(x.yearLow):"—"}</div></div>
+ <div class="metric"><div class="label">${MARKET_YEAR} low</div><div class="value">${Number.isFinite(x.yearLow)?"$"+num(x.yearLow):"—"}</div></div>
  <div class="metric"><div class="label">Above low</div><div class="value">${Number.isFinite(x.aboveLow)?num(x.aboveLow)+"%":"—"}</div></div>
- <div class="metric"><div class="label">2026 gain/loss</div><div class="value ${cls(x.ytd)}">${pct(x.ytd)}</div></div>
+ <div class="metric"><div class="label">${MARKET_YEAR} gain/loss</div><div class="value ${cls(x.ytd)}">${pct(x.ytd)}</div></div>
  <div class="metric"><div class="label">Range position</div><div class="value">${Number.isFinite(x.range)?num(x.range,0)+"%":"—"}</div></div><div class="metric"><div class="label">Opportunity score</div><div class="value ${Number.isFinite(x.opportunity)&&x.opportunity>=72?"pos":Number.isFinite(x.opportunity)&&x.opportunity<48?"neg":""}">${Number.isFinite(x.opportunity)?num(x.opportunity,0)+"/100":"—"}</div></div><div class="metric"><div class="label">Data confidence</div><div class="value ${boardDataConfidence(x).stale?"neg":boardDataConfidence(x).score>=85?"pos":""}">${boardDataConfidence(x).label} • ${boardDataConfidence(x).score}%</div></div>
  </div>
  ${!x.rated?`<div class="oppwhy"><b>Not yet rated:</b> Add quality and value ratings before using this stock in opportunity ranking.</div>`:Number.isFinite(x.opportunity)?`<div class="oppwhy"><b>Why it ranks here:</b> ${x.oppReasons.length?x.oppReasons.slice(0,4).join(" • "):"mixed setup"}${x.oppWarnings.length?`<br><span class="neg">Caution: ${x.oppWarnings.join(" • ")}</span>`:""}<br><span class="name">${RATINGS_METHOD}. ${ratingsAgeText()}</span></div>`:""}
  <div class="rangebar"><div class="rangefill" style="width:${Number.isFinite(x.range)?x.range:0}%"></div></div>
- <div class="bottom"><div><span class="tag">${label(x)}${Number.isFinite(x.range)?` • ${num(x.range,0)}% up range`:""}</span><div class="alerttext ${x.hitLow||x.hitHigh?"alert-hit":""}">${alertText(x)}${Number.isFinite(x.quoteAt)?` • Live quote ${new Date(x.quoteAt).toLocaleTimeString()}`:Number.isFinite(x.yearAt)?` • Cached/history ${new Date(x.yearAt).toLocaleDateString()}`:""}</div></div>
+ <div class="bottom"><div><span class="tag">${label(x)}${Number.isFinite(x.range)?` • ${num(x.range,0)}% up range`:""}</span><div class="alerttext ${x.hitLow||x.hitHigh?"alert-hit":""}">${alertText(x)}${priceTimestampText(x)}</div></div>
  <div class="actions"><button onclick="editHolding('${x.symbol}')">Portfolio</button><button class="chartbtn" onclick="toggleChart('${x.symbol}')">Chart</button><button class="alertbtn" onclick="setAlert('${x.symbol}')">Alert</button><button class="remove" type="button" data-remove-symbol="${x.symbol}">${pendingRemoveSymbol===x.symbol?"Tap again":"Remove"}</button></div></div>
  <div id="chart-${x.symbol}" class="chartpanel ${openCharts[x.symbol]?"open":""}"><div class="charthead"><span class="charttitle">${x.symbol} chart</span><div class="charttabs">
  <button class="${(openCharts[x.symbol]?.range||"3mo")==="1d"?"active":""}" onclick="loadChart('${x.symbol}','1d',this)">1D</button><button class="${(openCharts[x.symbol]?.range||"3mo")==="1mo"?"active":""}" onclick="loadChart('${x.symbol}','1mo',this)">1M</button><button class="${(openCharts[x.symbol]?.range||"3mo")==="3mo"?"active":""}" onclick="loadChart('${x.symbol}','3mo',this)">3M</button><button class="${(openCharts[x.symbol]?.range||"3mo")==="1y"?"active":""}" onclick="loadChart('${x.symbol}','1y',this)">1Y</button>
@@ -667,6 +680,13 @@ async function refresh(options={}){
     }catch(e){recordDiagnostic("yahooExtended",s,e)}
    }
    if(stopped)break;
+   const regularPrev=Number.isFinite(merged.regularPrev)?merged.regularPrev:merged.prev;
+   const regularDayDollar=Number.isFinite(merged.regularDayDollar)?merged.regularDayDollar:Number.isFinite(regularPrev)?merged.regularPrice-regularPrev:null;
+   const regularDayPct=Number.isFinite(merged.regularDayPct)?merged.regularDayPct:Number.isFinite(regularDayDollar)&&Number.isFinite(regularPrev)&&regularPrev!==0?regularDayDollar/regularPrev*100:null;
+   const regularQuoteSnapshot=Number.isFinite(merged.regularPrice)?{
+    price:merged.regularPrice,regularPrice:merged.regularPrice,prev:regularPrev,
+    dayDollar:regularDayDollar,dayPct:regularDayPct,priceSource:merged.extendedSource||"Yahoo daily/extended"
+   }:null;
    const needYear=force||!old.yearAt||Date.now()-old.yearAt>24*60*60*1000;
    if(needYear){
     try{
@@ -683,9 +703,8 @@ async function refresh(options={}){
    // synchronized with the exact price shown at the top of the stock card.
    if(liveQuote){
     Object.assign(merged,liveQuote);
-   }else if(Number.isFinite(merged.regularPrice)){
-    merged.price=merged.regularPrice;
-    merged.priceSource=merged.extendedSource||"Yahoo daily/extended";
+   }else if(regularQuoteSnapshot){
+    Object.assign(merged,regularQuoteSnapshot);
    }else if(!Number.isFinite(merged.price)&&Number.isFinite(merged.historyPrice)){
     merged.price=merged.historyPrice;
     merged.priceSource=merged.historySource||"Yahoo history";
@@ -774,7 +793,7 @@ function restoreXrayNotes(notes){
  if(!notes||typeof notes!=="object")return;
  Object.entries(notes).forEach(([symbol,text])=>localStorage.setItem(`xrayNotes:${String(symbol).toUpperCase()}`,String(text??"")));
 }
-$("exportCSV").onclick=()=>{const rows=allRows(watch.map(w=>calculated({...w,...(data[w.symbol]||{})})));const esc=v=>`"${String(v??"").replace(/"/g,'""')}"`;const headers=["Symbol","Name","Price","Day Change %","2026 Gain/Loss %","Opportunity Score","2026 High","2026 Low","Range Position %"];const lines=[headers.map(esc).join(",")];for(const r of rows)lines.push([r.symbol,r.name,Number.isFinite(r.price)?r.price.toFixed(2):"",Number.isFinite(r.dayPct)?r.dayPct.toFixed(2):"",Number.isFinite(r.ytd)?r.ytd.toFixed(2):"",Number.isFinite(r.opportunity)?r.opportunity.toFixed(0):"",Number.isFinite(r.yearHigh)?r.yearHigh.toFixed(2):"",Number.isFinite(r.yearLow)?r.yearLow.toFixed(2):"",Number.isFinite(r.range)?r.range.toFixed(0):""].map(esc).join(","));const blob=new Blob([lines.join("\n")],{type:"text/csv;charset=utf-8"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=`stock-data-${new Date().toISOString().slice(0,10)}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);showToast("CSV exported","success")};
+$("exportCSV").onclick=()=>{const rows=allRows(watch.map(w=>calculated({...w,...(data[w.symbol]||{})})));const esc=v=>`"${String(v??"").replace(/"/g,'""')}"`;const headers=["Symbol","Name","Price","Day Change %",`${MARKET_YEAR} Gain/Loss %`,"Opportunity Score",`${MARKET_YEAR} High`,`${MARKET_YEAR} Low`,"Range Position %"];const lines=[headers.map(esc).join(",")];for(const r of rows)lines.push([r.symbol,r.name,Number.isFinite(r.price)?r.price.toFixed(2):"",Number.isFinite(r.dayPct)?r.dayPct.toFixed(2):"",Number.isFinite(r.ytd)?r.ytd.toFixed(2):"",Number.isFinite(r.opportunity)?r.opportunity.toFixed(0):"",Number.isFinite(r.yearHigh)?r.yearHigh.toFixed(2):"",Number.isFinite(r.yearLow)?r.yearLow.toFixed(2):"",Number.isFinite(r.range)?r.range.toFixed(0):""].map(esc).join(","));const blob=new Blob([lines.join("\n")],{type:"text/csv;charset=utf-8"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=`stock-data-${new Date().toISOString().slice(0,10)}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);showToast("CSV exported","success")};
 $("export").onclick=()=>{
  const payload={version:2,exportedAt:new Date().toISOString(),watchlist:watch,alerts,openCharts,xrayNotes:collectXrayNotes(),holdings,settings:{sort:$("sort").value}};
  const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
@@ -798,14 +817,14 @@ $("importFile").onchange=async e=>{
  }catch(err){alert("That backup file could not be restored.");}
  finally{e.target.value="";}
 };
-$("reset").onclick=()=>{if(confirm("Restore the base 28-stock list?")){
+$("reset").onclick=()=>{if(confirm(`Restore the ${BASE_LIST_COUNT}-stock starter list?`)){
  stopped=true;
  watch=ORIGINAL.map(x=>({symbol:x[0],name:x[1]}));
  const keep=new Set(watch.map(x=>x.symbol));
  data=Object.fromEntries(Object.entries(data).filter(([symbol])=>keep.has(symbol)));
  alerts=Object.fromEntries(Object.entries(alerts).filter(([symbol])=>keep.has(symbol)));
  openCharts={};save();render();
- $("status").textContent="Base 28 restored from saved data. A protected batch refresh will begin shortly.";
+ $("status").textContent=`${BASE_LIST_COUNT}-stock starter list restored from saved data. A protected batch refresh will begin shortly.`;
  setTimeout(()=>refresh({force:false}),1500);
 }}
 function createAutoBackup(){const backup={version:2,exportedAt:new Date().toISOString(),watchlist:watch,alerts,openCharts,xrayNotes:typeof collectXrayNotes==="function"?collectXrayNotes():{},holdings};try{localStorage.setItem("steveAutoBackup",JSON.stringify(backup))}catch(e){}}
@@ -843,12 +862,10 @@ document.addEventListener("click",e=>{
  stopped=true;
  $("status").textContent="Board loading paused — giving X-Ray priority.";
  const symbol=String(a.dataset.xraySymbol||"").toUpperCase();
- const calculatedAll=watch.map(w=>calculated({...w,...(data[w.symbol]||{})}));
+ const calculatedAll=withBoardRanks(watch.map(w=>calculated({...w,...(data[w.symbol]||{})})));
  const row=calculatedAll.find(v=>v.symbol===symbol);
  if(row){
-  const ranked=[...calculatedAll].filter(v=>Number.isFinite(v.opportunity)).sort((a,b)=>b.opportunity-a.opportunity);
-  const rank=ranked.findIndex(v=>v.symbol===symbol);
-  saveXrayContext({...row,opportunityRank:rank>=0?rank+1:null},ranked.length||calculatedAll.length);
+  saveXrayContext(row,row.opportunityTotal);
  }
 },true);
 function bootBoard(){
