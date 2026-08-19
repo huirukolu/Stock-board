@@ -165,10 +165,10 @@ const ORIGINAL=[
 const BASE_LIST_COUNT=ORIGINAL.length;
 
 const QUALITY={
-VTI:88,TSM:94,QQQM:90,META:93,MU:88,TEL:87,NVDA:95,AVGO:94,GEV:84,APH:91,NVT:80,AMAT:91,SOXQ:84,TTE:76,ALGM:73,LRCX:91,RTX:84,RMBS:70,BYDDY:82,CEG:86,VST:82,VRT:84,CRDO:75,GLO:62,FN:86,MELI:91,PYPL:76,KLAC:93,FLEX:78,AMD:88,NBIS:68,MRVL:82,CMI:84,CAT:88,EQT:78,HWM:88,ET:78,ONTO:84,SKHY:89,RKLB:67,ETN:92,SNDK:74,HPE:73,IONQ:57,ZTS:88,WDC:76,DELL:80,CSCO:80,DUK:82,ANET:94
+VTI:88,TSM:94,QQQM:90,META:93,MU:88,TEL:87,NVDA:95,AVGO:94,GEV:84,APH:91,NVT:80,AMAT:91,SOXQ:84,TTE:76,ALGM:73,LRCX:91,RTX:84,RMBS:70,BYDDY:82,CEG:86,VST:82,VRT:84,CRDO:75,GLO:62,FN:86,MELI:91,PYPL:76,KLAC:93,FLEX:78,AMD:88,NBIS:68,MRVL:82,CMI:84,CAT:88,EQT:78,HWM:88,ET:78,ONTO:84,SKHY:89,RKLB:67,ETN:92,SNDK:74,HPE:73,IONQ:57,ZTS:88,WDC:76,DELL:80,CSCO:80,DUK:82,ANET:94,ASML:93,ORCL:85,GOOGL:94,MSFT:95,AMZN:91
 };
 const VALUE={
-VTI:72,TSM:82,QQQM:62,META:78,MU:80,TEL:70,NVDA:55,AVGO:58,GEV:48,APH:47,NVT:66,AMAT:63,SOXQ:60,TTE:86,ALGM:68,LRCX:62,RTX:74,RMBS:58,BYDDY:78,CEG:70,VST:72,VRT:46,CRDO:34,GLO:76,FN:58,MELI:52,PYPL:84,KLAC:56,FLEX:80,AMD:50,NBIS:42,MRVL:50,CMI:76,CAT:61,EQT:84,HWM:48,ET:88,ONTO:62,SKHY:90,RKLB:32,ETN:57,SNDK:55,HPE:82,IONQ:24,ZTS:72,WDC:74,DELL:74,CSCO:82,DUK:78,ANET:43
+VTI:72,TSM:82,QQQM:62,META:78,MU:80,TEL:70,NVDA:55,AVGO:58,GEV:48,APH:47,NVT:66,AMAT:63,SOXQ:60,TTE:86,ALGM:68,LRCX:62,RTX:74,RMBS:58,BYDDY:78,CEG:70,VST:72,VRT:46,CRDO:34,GLO:76,FN:58,MELI:52,PYPL:84,KLAC:56,FLEX:80,AMD:50,NBIS:42,MRVL:50,CMI:76,CAT:61,EQT:84,HWM:48,ET:88,ONTO:62,SKHY:90,RKLB:32,ETN:57,SNDK:55,HPE:82,IONQ:24,ZTS:72,WDC:74,DELL:74,CSCO:82,DUK:78,ANET:43,ASML:48,ORCL:55,GOOGL:72,MSFT:58,AMZN:62
 };
 const MARKET_YEAR=new Date().getFullYear();
 const RATINGS_VERSION="2026-07-22";
@@ -303,7 +303,7 @@ function marketSession(){
 }
 function updateMarketBadge(){const m=marketSession(),b=$("marketBadge");b.textContent=m.label;b.className="marketbadge "+(m.key==="open"?"open":(["premarket","afterhours"].includes(m.key)?"extended":""))}
 function yahooSymbol(s){return s}
-function yahooUrls(path){const a=`https://query1.finance.yahoo.com${path}`,b=`https://query2.finance.yahoo.com${path}`;return[a,b,`https://corsproxy.io/?url=${encodeURIComponent(a)}`,`https://api.allorigins.win/raw?url=${encodeURIComponent(a)}`,`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(a)}`,`https://thingproxy.freeboard.io/fetch/${a}`]}
+function yahooUrls(path){const a=`https://query1.finance.yahoo.com${path}`,b=`https://query2.finance.yahoo.com${path}`;return[`https://corsproxy.io/?url=${encodeURIComponent(a)}`,`https://api.allorigins.win/raw?url=${encodeURIComponent(a)}`,`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(a)}`,`https://thingproxy.freeboard.io/fetch/${a}`,a,b]}
 async function fetchJson(urls){
  let last;
  for(const url of urls){
