@@ -47,7 +47,7 @@ button{font-weight:800;cursor:pointer}.primary{background:#173b63;border-color:#
 .actions{display:flex;gap:7px;flex-wrap:wrap}.actions button{width:auto;padding:9px 11px;font-size:13px}
 details{margin-top:10px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:13px}
 summary{font-weight:850;cursor:pointer}.settings{display:grid;gap:8px;margin-top:11px}.note{font-size:12px;color:var(--muted);line-height:1.45}
-    .empty{color:var(--muted);padding:10px 0}.warning{color:var(--gold)}.periodBadge{display:inline-block;margin-left:4px;padding:2px 5px;border:1px solid var(--line);border-radius:99px;font-size:9px;font-weight:900;vertical-align:1px}.periodBadge.ttm{color:var(--green);border-color:#2d7850;background:#10291a}.periodBadge.fy{color:#a9d2ff;border-color:#2d73b7;background:#142a43}
+.empty{color:var(--muted);padding:10px 0}.warning{color:var(--gold)}
 table{width:100%;border-collapse:collapse;font-size:12px}
 .scoreGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
 .bigScore{background:var(--panel2);border-radius:12px;padding:12px;text-align:center}
@@ -81,7 +81,7 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
     <input id="compareTicker" autocomplete="off" autocapitalize="characters" placeholder="Optional comparison ticker, for example MU">
     <button id="compareBtn">Compare</button>
   </div>
-  <div id="status" class="status" aria-live="polite">Enter any U.S.-traded ticker. Your saved Finnhub key from the Stock Board will be reused.</div>
+  <div id="status" class="status">Enter any U.S.-traded ticker. Your saved Finnhub key from the Stock Board will be reused.</div>
 
   <section id="hero" class="hero" hidden>
     <div class="heroTop">
@@ -222,7 +222,7 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
     </section>
   </div>
 
-  <details id="xraySettings">
+  <details>
     <summary>Settings & data notes</summary>
     <div class="settings">
       <input id="apiKey" type="password" placeholder="Finnhub API key">
@@ -234,20 +234,7 @@ textarea{width:100%;min-height:110px;border:1px solid var(--line);border-radius:
 <script>
 const $=id=>document.getElementById(id);
 const state={symbol:"",name:"",instrumentType:"",quote:{},profile:{},metrics:{},summary:{},reportedFinancials:{},reportedFinancialsIssue:"",cashflowSourceText:"",lookup:{},chart:{},recommendations:[],news:[],scores:{},evidence:{available:0,total:22},cashflowEvidence:0,scoreCoverage:0,confidence:0,overall:null,verdict:"",compare:null};
-let analyzing=false,comparing=false,storageWarningShown=false;
-function reportStorageFailure(error){
- const quota=error?.name==="QuotaExceededError"||error?.code===22||/quota|storage/i.test(String(error?.message||error));
- const message=quota?"Storage full. Export a Board backup now, then clear old notes or cached charts.":"This browser could not save the latest X-Ray change. Export a Board backup before continuing.";
- console.warn("Stock X-Ray storage save failed",error);$("status").textContent=message;
- if(!storageWarningShown){storageWarningShown=true;alert(message);}
-}
-function readStoredText(key){try{return localStorage.getItem(key)||""}catch(error){reportStorageFailure(error);return""}}
-function storeText(key,value){try{localStorage.setItem(key,String(value));return true}catch(error){reportStorageFailure(error);return false}}
-function removeStored(key){try{localStorage.removeItem(key);return true}catch(error){reportStorageFailure(error);return false}}
-function markBoardBackupNeeded(){storeText("steveBackupDirtyAt",Date.now());}
-function snapshotState(){try{return typeof structuredClone==="function"?structuredClone(state):JSON.parse(JSON.stringify(state))}catch(error){console.warn("Could not clone X-Ray state",error);return {...state};}}
-function restoreState(snapshot){for(const key of Object.keys(state))delete state[key];Object.assign(state,snapshot);}
-$("apiKey").value=readStoredText("finnhubKey");
+$("apiKey").value=localStorage.getItem("finnhubKey")||"";
 const clamp=(v,a=0,b=100)=>Math.max(a,Math.min(b,v));
 const finite=v=>v!==null&&v!==undefined&&typeof v!=="boolean"&&!(typeof v==="string"&&!v.trim())&&Number.isFinite(Number(v));
 const positive=v=>finite(v)&&Number(v)>0;
@@ -259,11 +246,6 @@ const safe=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"
 const safeUrl=value=>{try{const u=new URL(String(value??""));return u.protocol==="https:"||u.protocol==="http:"?u.href:"#"}catch{return"#"}};
 const fundLike=type=>/(^|\s)(ETF|ETP|FUND|MUTUAL\s*FUND|MONEY\s*MARKET|INDEX)(\s|$)/i.test(String(type||"").replace(/[_-]/g," "));
 function metric(label,value,cls=""){return `<div class="metric"><div class="label">${safe(label)}</div><div class="value ${cls}">${safe(value)}</div></div>`}
-function cashflowMetric(label,value,period=""){
- const kind=period==="TTM"?"ttm":/^FY\b/.test(String(period))?"fy":"";
- const badge=kind?` <span class="periodBadge ${kind}">${safe(period)}</span>`:"";
- return `<div class="metric"><div class="label">${safe(label)}${badge}</div><div class="value">${safe(value)}</div></div>`;
-}
 function first(...vals){return vals.find(finite) ?? null}
 function firstPositive(...vals){return vals.find(positive) ?? null}
 const conceptKey=value=>String(value??"").toLowerCase().replace(/[^a-z0-9]/g,"");
@@ -380,7 +362,6 @@ function yahooUrls(path){
  const a=`https://query1.finance.yahoo.com${path}`,b=`https://query2.finance.yahoo.com${path}`;
  return[a,b,`https://corsproxy.io/?url=${encodeURIComponent(a)}`,`https://api.allorigins.win/raw?url=${encodeURIComponent(a)}`];
 }
-function yahooSymbol(symbol){return String(symbol??"").trim().toUpperCase().replace(/\./g,"-")}
 async function tryUrls(urls){
  try{return await Promise.any(urls.map(u=>fetchTimeout(u)))}
  catch(e){throw e?.errors?.find(Boolean)||Error("Unavailable")}
@@ -392,9 +373,8 @@ async function finnhub(path,key){
 async function loadAll(symbol){
  const key=$("apiKey").value.trim();
  const to=Math.floor(Date.now()/1000),from=to-45*86400;
- const yahoo=yahooSymbol(symbol);
- const yahooPath=`/v10/finance/quoteSummary/${encodeURIComponent(yahoo)}?modules=price,summaryDetail,defaultKeyStatistics,financialData`;
- const chartPath=`/v8/finance/chart/${encodeURIComponent(yahoo)}?range=5d&interval=1d`;
+ const yahooPath=`/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=price,summaryDetail,defaultKeyStatistics,financialData`;
+ const chartPath=`/v8/finance/chart/${encodeURIComponent(symbol)}?range=5d&interval=1d`;
  const jobs=[
   finnhub(`quote?symbol=${encodeURIComponent(symbol)}`,key),
   finnhub(`stock/profile2?symbol=${encodeURIComponent(symbol)}`,key),
@@ -473,10 +453,6 @@ function compute(){
  const yahooRevenue=firstPositive(raw(s.financialData?.totalRevenue));
  const financialCurrency=currencyCode(raw(s.financialData?.financialCurrency))||reportedCash.currency||currencyCode(state.profile?.currency);
  const priceCurrency=currencyCode(raw(s.price?.currency))||currencyCode(state.profile?.currency);
- const cashflowCurrenciesMatch=Boolean(financialCurrency&&reportedCash.currency&&financialCurrency===reportedCash.currency);
- const sourceDifferencePct=(trailing,annual)=>finite(trailing)&&finite(annual)&&Number(annual)!==0?Math.abs(Number(trailing)-Number(annual))/Math.abs(Number(annual))*100:null;
- const cashflowDifferences=cashflowCurrenciesMatch?[sourceDifferencePct(yahooOperatingCashFlow,reportedCash.operatingCashFlow),sourceDifferencePct(yahooFreeCashFlow,reportedCash.freeCashFlow)].filter(finite):[];
- const largestCashflowDifference=cashflowDifferences.length?Math.max(...cashflowDifferences):null;
  const operatingCashFlow=first(yahooOperatingCashFlow,reportedCash.operatingCashFlow);
  const leveredFreeCashFlow=first(yahooFreeCashFlow,reportedCash.freeCashFlow);
  const operatingCashFlowCurrency=finite(yahooOperatingCashFlow)?financialCurrency:reportedCash.currency;
@@ -558,11 +534,10 @@ function compute(){
  if(finite(leveredFreeCashFlow))sourceParts.push(`Free cash flow: ${finite(yahooFreeCashFlow)?"Yahoo trailing data":`calculated from Finnhub annual filing as operating cash flow minus capital spending${reportedCash.periodEnd?` for the year ended ${reportedCash.periodEnd}`:""}`} (${freeCashFlowCurrency||"currency unavailable"}).`);
  if(finite(leveredFreeCashFlow)&&positive(marketCap)&&freeCashFlowCurrency&&marketCapCurrency&&freeCashFlowCurrency!==marketCapCurrency)sourceParts.push(`FCF yield is withheld because the cash flow is in ${freeCashFlowCurrency} while market value is in ${marketCapCurrency}.`);
  if(!perShareMatchesPrice&&(finite(rawFreeCashFlowPerShare)||finite(rawOperatingCashFlowPerShare)))sourceParts.push("Per-share cash-flow values are also withheld because their financial currency does not match the listing currency.");
- if(finite(largestCashflowDifference)&&largestCashflowDifference>=35)sourceParts.push(`Caution: Yahoo trailing cash flow and the latest annual filing differ by about ${fmt(largestCashflowDifference,0)}%. Verify the latest quarter before relying on these cash-flow measures.`);
  if(!sourceParts.length)sourceParts.push(`No dependable company cash-flow totals were returned${state.reportedFinancialsIssue?`; the annual-filing fallback was ${state.reportedFinancialsIssue}`:""}.`);
  sourceParts.push("Finnhub per-share cash-flow metrics stay separate; missing values are not replaced with differently scaled data.");
  state.cashflowSourceText=sourceParts.join(" ");
- state.derived={price,pe,fpe,ps,pb,peg,revGrowth,epsGrowth,grossMargin,operatingMargin,netMargin,roe,currentRatio,debtEquity,leveredFreeCashFlow,operatingCashFlow,totalRevenue,freeCashFlowPerShare,operatingCashFlowPerShare,operatingCashFlowMargin,leveredFcfMargin,leveredFcfYield,freeCashFlowPerShareYield,cash,debt,financialCurrency,priceCurrency,marketCap,marketCapCurrency,perShareCurrency,perShareMatchesPrice,operatingCashFlowCurrency,freeCashFlowCurrency,operatingCashFlowPeriod,freeCashFlowPeriod,cashflowMatchesMarket,largestCashflowDifference,target,analystUpside,beta,high52,low52,belowHigh,aboveLow,dividendYield,payoutRatio,fairEstimate,marginOfSafety,dayChange:first(q.dp)};
+ state.derived={price,pe,fpe,ps,pb,peg,revGrowth,epsGrowth,grossMargin,operatingMargin,netMargin,roe,currentRatio,debtEquity,leveredFreeCashFlow,operatingCashFlow,totalRevenue,freeCashFlowPerShare,operatingCashFlowPerShare,operatingCashFlowMargin,leveredFcfMargin,leveredFcfYield,freeCashFlowPerShareYield,cash,debt,financialCurrency,priceCurrency,marketCap,marketCapCurrency,perShareCurrency,perShareMatchesPrice,operatingCashFlowCurrency,freeCashFlowCurrency,operatingCashFlowPeriod,freeCashFlowPeriod,cashflowMatchesMarket,target,analystUpside,beta,high52,low52,belowHigh,aboveLow,dividendYield,payoutRatio,fairEstimate,marginOfSafety,dayChange:first(q.dp)};
  state.verdict=verdict(overall,confidence,allocation.available,state.instrumentType);
 }
 function recommendationScore(){
@@ -697,7 +672,7 @@ function snapshot(){
  };
 }
 async function analyzeSymbolForCompare(symbol){
- const old=snapshotState();
+ const old={...state};
  try{
    state.symbol=symbol;
    const loaded=await loadAll(symbol);
@@ -705,7 +680,7 @@ async function analyzeSymbolForCompare(symbol){
    compute();
    return snapshot();
  }finally{
-   restoreState(old);
+   Object.assign(state,old);
  }
 }
 function renderCompare(a,b){
@@ -764,7 +739,7 @@ function buffettLens(){
 }
 function loadNotes(){
  const key=`xrayNotes:${state.symbol}`;
- $("myNotes").value=readStoredText(key);
+ $("myNotes").value=localStorage.getItem(key)||"";
 }
 
 
@@ -830,7 +805,7 @@ function render(){
  ].join("");
  $("balance").innerHTML=[
    metric("Current ratio",fmt(d.currentRatio,2)),metric("Debt / equity",finite(d.debtEquity)?fmt(d.debtEquity,1)+"%":"—"),metric("Cash",compactCurrency(d.cash,d.financialCurrency)),metric("Debt",compactCurrency(d.debt,d.financialCurrency)),
-   cashflowMetric("Operating cash flow",compactCurrency(d.operatingCashFlow,d.operatingCashFlowCurrency),d.operatingCashFlowPeriod),cashflowMetric("Free cash flow",compactCurrency(d.leveredFreeCashFlow,d.freeCashFlowCurrency),d.freeCashFlowPeriod),metric("OCF margin",pct(d.operatingCashFlowMargin)),metric("FCF margin",pct(d.leveredFcfMargin)),
+   metric(`Operating cash flow${d.operatingCashFlowPeriod?` (${d.operatingCashFlowPeriod})`:""}`,compactCurrency(d.operatingCashFlow,d.operatingCashFlowCurrency)),metric(`Free cash flow${d.freeCashFlowPeriod?` (${d.freeCashFlowPeriod})`:""}`,compactCurrency(d.leveredFreeCashFlow,d.freeCashFlowCurrency)),metric("OCF margin",pct(d.operatingCashFlowMargin)),metric("FCF margin",pct(d.leveredFcfMargin)),
    metric("FCF yield",pct(d.leveredFcfYield)),metric("Free cash flow / share",currencyMoney(d.freeCashFlowPerShare,d.perShareCurrency)),metric("Operating cash flow / share",currencyMoney(d.operatingCashFlowPerShare,d.perShareCurrency)),metric("Market cap",compactCurrency(d.marketCap,d.marketCapCurrency)),metric("Dividend yield",pct(d.dividendYield)),metric("Payout ratio",pct(d.payoutRatio))
  ].join("");
  $("cashflowSource").textContent=state.cashflowSourceText;
@@ -909,12 +884,11 @@ function currencyMoney(v,currency="USD",digits=2){
 const normalizeSymbol=value=>String(value??"").trim().toUpperCase().replace(/\s/g,"");
 const validSymbol=symbol=>/^[A-Z0-9][A-Z0-9.-]{0,14}$/.test(symbol);
 async function analyze(){
- if(analyzing)return;
  const symbol=normalizeSymbol($("ticker").value);
  if(!symbol){$("status").textContent="Enter a ticker first.";return}
  if(!validSymbol(symbol)){$("status").textContent="Use a valid ticker containing only letters, numbers, a period or a hyphen.";return}
- const previous=snapshotState();
- analyzing=true;state.symbol=symbol;$("analyze").disabled=true;$("compareBtn").disabled=true;$("status").textContent=`Running X-Ray on ${symbol}… collecting quote, fundamentals, analyst ratings and news.`;
+ const previous={...state};
+ state.symbol=symbol;$("analyze").disabled=true;$("status").textContent=`Running X-Ray on ${symbol}… collecting quote, fundamentals, analyst ratings and news.`;
  try{
    const result=await loadAll(symbol);
    const feedIssue=finnhubIssue(result);
@@ -924,22 +898,25 @@ async function analyze(){
    $("status").textContent=`X-Ray complete • ${result.usable}/${result.total} sections supplied usable data.${limited}${feedIssue?` ${feedIssue}`:""}`;
    history.replaceState(null,"",`?ticker=${encodeURIComponent(symbol)}`);
  }catch(e){
-   restoreState(previous);
+   Object.assign(state,previous);
    $("status").textContent=`Could not analyze ${symbol}: ${e.message||e}`;
- }finally{analyzing=false;$("analyze").disabled=false;$("compareBtn").disabled=comparing}
+ }finally{$("analyze").disabled=false}
 }
 $("analyze").onclick=analyze;
 $("ticker").addEventListener("keydown",e=>{if(e.key==="Enter")analyze()});
-$("saveKey").onclick=()=>{if(storeText("finnhubKey",$("apiKey").value.trim()))$("status").textContent="Finnhub key saved on this device."};
+$("saveKey").onclick=()=>{localStorage.setItem("finnhubKey",$("apiKey").value.trim());$("status").textContent="Finnhub key saved on this device."};
 $("backBtn").onclick=()=>{location.href="index.html"};
 
 $("saveNotesBtn").onclick=()=>{
  if(!state.symbol){$("status").textContent="Run an X-Ray first.";return}
- if(storeText(`xrayNotes:${state.symbol}`,$("myNotes").value)){markBoardBackupNeeded();$("status").textContent=`Notes saved for ${state.symbol}.`;}
+ localStorage.setItem(`xrayNotes:${state.symbol}`,$("myNotes").value);
+ $("status").textContent=`Notes saved for ${state.symbol}.`;
 };
 $("clearNotesBtn").onclick=()=>{
  if(!state.symbol)return;
- if(removeStored(`xrayNotes:${state.symbol}`)){markBoardBackupNeeded();$("myNotes").value="";$("status").textContent=`Notes cleared for ${state.symbol}.`;}
+ localStorage.removeItem(`xrayNotes:${state.symbol}`);
+ $("myNotes").value="";
+ $("status").textContent=`Notes cleared for ${state.symbol}.`;
 };
 
 $("copyBtn").onclick=async()=>{
@@ -949,13 +926,12 @@ $("copyBtn").onclick=async()=>{
 };
 
 $("compareBtn").onclick=async()=>{
- if(comparing||analyzing)return;
  const other=normalizeSymbol($("compareTicker").value);
  if(!state.symbol){$("status").textContent="Run the first X-Ray before comparing.";return}
  if(!other){$("status").textContent="Enter a comparison ticker.";return}
  if(!validSymbol(other)){$("status").textContent="Use a valid comparison ticker containing only letters, numbers, a period or a hyphen.";return}
  if(other===state.symbol){$("status").textContent="Choose a different ticker for the comparison.";return}
- comparing=true;$("compareBtn").disabled=true;$("analyze").disabled=true;$("status").textContent=`Comparing ${state.symbol} with ${other}…`;
+ $("compareBtn").disabled=true;$("status").textContent=`Comparing ${state.symbol} with ${other}…`;
  try{
    const a=snapshot();
    const b=await analyzeSymbolForCompare(other);
@@ -963,11 +939,10 @@ $("compareBtn").onclick=async()=>{
    $("status").textContent=`Comparison complete: ${state.symbol} versus ${other}.`;
  }catch(e){
    $("status").textContent=`Could not compare ${other}: ${e.message||e}`;
- }finally{comparing=false;$("compareBtn").disabled=false;$("analyze").disabled=analyzing}
+ }finally{$("compareBtn").disabled=false}
 };
 $("compareTicker").addEventListener("keydown",e=>{if(e.key==="Enter")$("compareBtn").click()});
 
-if(!$("apiKey").value.trim())$("xraySettings").open=true;
 const initial=new URLSearchParams(location.search).get("ticker");if(initial){$("ticker").value=initial.toUpperCase();setTimeout(analyze,250)}
 </script>
 </body>
