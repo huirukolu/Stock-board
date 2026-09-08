@@ -350,21 +350,34 @@ function dailyMoveScore(v){
  if(a<=3)return 100;if(a<=7)return 85;if(a<=12)return 65;if(a<=15)return 45;if(a<=25)return 20;return 10;
 }
 async function fetchTimeout(url,opts={},ms=14000){
- const c=new AbortController(),t=setTimeout(()=>c.abort(),ms);
+ const c=new AbortController(),parent=opts.signal,abort=()=>c.abort(),t=setTimeout(abort,ms);
+ if(parent?.aborted)abort();else parent?.addEventListener("abort",abort,{once:true});
  try{
   const r=await fetch(url,{...opts,signal:c.signal,cache:"no-store"});
   if(!r.ok){const error=Error(`HTTP ${r.status}`);error.status=r.status;throw error}
   return await r.json();
  }
- finally{clearTimeout(t)}
+ finally{clearTimeout(t);parent?.removeEventListener("abort",abort)}
 }
 function yahooUrls(path){
  const a=`https://query1.finance.yahoo.com${path}`,b=`https://query2.finance.yahoo.com${path}`;
- return[a,b,`https://corsproxy.io/?url=${encodeURIComponent(a)}`,`https://api.allorigins.win/raw?url=${encodeURIComponent(a)}`];
+ return[a,b,`https://api.allorigins.win/raw?url=${encodeURIComponent(a)}`,`https://api.allorigins.win/raw?url=${encodeURIComponent(b)}`];
 }
-async function tryUrls(urls){
- try{return await Promise.any(urls.map(u=>fetchTimeout(u)))}
+async function tryUrls(urls,validate=x=>x){
+ const group=new AbortController();
+ try{return await Promise.any(urls.map(async u=>validate(await fetchTimeout(u,{signal:group.signal}))))}
  catch(e){throw e?.errors?.find(Boolean)||Error("Unavailable")}
+ finally{group.abort()}
+}
+function validYahooSummary(j){
+ const result=j?.quoteSummary?.result?.[0];
+ if(j?.quoteSummary?.error||!result||!Object.values(result).some(v=>v&&typeof v==="object"&&Object.keys(v).length))throw Error("Yahoo fundamentals unavailable");
+ return j;
+}
+function validYahooChart(j){
+ const result=j?.chart?.result?.[0];
+ if(j?.chart?.error||!result||!result.meta||!positive(result.meta.regularMarketPrice))throw Error("Yahoo chart unavailable");
+ return j;
 }
 async function finnhub(path,key){
  if(!key)throw Error("No Finnhub key");
@@ -381,10 +394,10 @@ async function loadAll(symbol){
   finnhub(`stock/metric?symbol=${encodeURIComponent(symbol)}&metric=all`,key),
  finnhub(`stock/recommendation?symbol=${encodeURIComponent(symbol)}`,key),
  finnhub(`company-news?symbol=${encodeURIComponent(symbol)}&from=${new Date(from*1000).toISOString().slice(0,10)}&to=${new Date(to*1000).toISOString().slice(0,10)}`,key),
- tryUrls(yahooUrls(yahooPath)),
+ tryUrls(yahooUrls(yahooPath),validYahooSummary),
   finnhub(`stock/financials-reported?symbol=${encodeURIComponent(symbol)}&freq=annual`,key),
   finnhub(`search?q=${encodeURIComponent(symbol)}&exchange=US`,key),
-  tryUrls(yahooUrls(chartPath))
+  tryUrls(yahooUrls(chartPath),validYahooChart)
  ];
  const r=await Promise.allSettled(jobs);
  state.quote=r[0].status==="fulfilled"?r[0].value:{};
