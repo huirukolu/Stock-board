@@ -72,7 +72,7 @@ summary{font-weight:850;cursor:pointer}.settings{display:grid;gap:9px;margin-top
     <button id="refresh" class="primary">Refresh</button>
     <button id="stop">Stop</button>
   </div>
-  <div id="status" class="status">Open Settings once, add a free Finnhub API key, and press Refresh.</div>
+  <div id="status" class="status" role="status" aria-live="polite">Open Settings once, add a free Finnhub API key, and press Refresh.</div>
 
   <div class="tabs">
     <button class="active" data-view="all">All stocks</button>
@@ -101,7 +101,7 @@ summary{font-weight:850;cursor:pointer}.settings{display:grid;gap:9px;margin-top
       <input id="apiKey" type="password" placeholder="Paste free Finnhub API key">
       <button id="saveKey">Save key on this device</button>
       <div class="note">
-        The key stays in this browser. The first full refresh retrieves current quotes and 2026 daily history for 50 stocks. Later refreshes reuse the yearly data for 12 hours and are faster. Free feeds can be delayed or unavailable for some foreign or OTC symbols. Verify prices in Fidelity or Robinhood before trading.
+        Your key is sent only to Finnhub. Current quotes come from Finnhub; yearly history comes from Yahoo, with public relay fallbacks. Later refreshes reuse successful history for 12 hours. Failed history is retried on Refresh, and saved history is labeled if an update fails. The average uses daily closing prices; year gain/loss starts at the last available close before January 1 (or the first available close for a new listing). Free feeds can be delayed or unavailable for some foreign or OTC symbols. Verify prices in Fidelity or Robinhood before trading.
       </div>
     </div>
   </details>
@@ -122,47 +122,98 @@ const ORIGINAL=[
 ["WDC","Western Digital"],["DELL","Dell Technologies"],["CSCO","Cisco Systems"],["DUK","Duke Energy"],["ANET","Arista Networks"]
 ];
 const $=id=>document.getElementById(id);
-let watch=JSON.parse(localStorage.getItem("steveWatchV2")||"null")||ORIGINAL.map(x=>({symbol:x[0],name:x[1]}));
-let data=JSON.parse(localStorage.getItem("steveDataV2")||"{}");
+const YEAR=new Date().getFullYear(),HISTORY_SCHEMA=2,HISTORY_TTL=12*60*60*1000;
+function readSaved(key,fallback){try{return JSON.parse(localStorage.getItem(key)||"null")??fallback}catch{return fallback}}
+const validSymbol=s=>typeof s==="string"&&/^[A-Z0-9^][A-Z0-9.^=-]{0,19}$/.test(s);
+let watch=readSaved("steveWatchV2",ORIGINAL.map(x=>({symbol:x[0],name:x[1]})));
+if(!Array.isArray(watch))watch=ORIGINAL.map(x=>({symbol:x[0],name:x[1]}));
+watch=watch.filter(x=>x&&validSymbol(x.symbol)).map(x=>({symbol:x.symbol,name:String(x.name||x.symbol)}));
+let data=readSaved("steveDataV2",{});
+if(!data||typeof data!=="object"||Array.isArray(data))data={};
 let stopped=false, view="all";
 $("apiKey").value=localStorage.getItem("finnhubKey")||"";
 
 function save(){localStorage.setItem("steveWatchV2",JSON.stringify(watch));localStorage.setItem("steveDataV2",JSON.stringify(data))}
+const positive=v=>Number.isFinite(v)&&v>0;
+const safe=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 function num(v,d=2){return Number.isFinite(v)?v.toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d}):"—"}
 function pct(v){return Number.isFinite(v)?`${v>=0?"+":""}${num(v)}%`:"—"}
 function cls(v){return v>0?"pos":v<0?"neg":"flat"}
 function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
-function yearStartUnix(){return Math.floor(new Date(new Date().getFullYear(),0,1).getTime()/1000)}
+function yearStartUnix(){return Date.UTC(YEAR,0,1)/1000}
 function nowUnix(){return Math.floor(Date.now()/1000)}
 
+async function fetchTimeout(url,opts={},ms=12000){
+  const controller=new AbortController(),parent=opts.signal;
+  const abort=()=>controller.abort();
+  if(parent?.aborted)abort();else parent?.addEventListener("abort",abort,{once:true});
+  const timer=setTimeout(abort,ms);
+  try{
+    const r=await fetch(url,{...opts,signal:controller.signal,cache:"no-store"});
+    if(!r.ok){const e=Error(`HTTP ${r.status}`);e.status=r.status;throw e}
+    return await r.json();
+  }finally{clearTimeout(timer);parent?.removeEventListener("abort",abort)}
+}
+function yahooUrls(path){
+  const a=`https://query1.finance.yahoo.com${path}`,b=`https://query2.finance.yahoo.com${path}`;
+  // Relay only public Yahoo requests. The Finnhub key never enters these URLs.
+  return [a,b,`https://api.allorigins.win/raw?url=${encodeURIComponent(a)}`,`https://api.allorigins.win/raw?url=${encodeURIComponent(b)}`];
+}
+async function tryUrls(urls,validate=x=>x){
+  const group=new AbortController();
+  try{return await Promise.any(urls.map(async url=>validate(await fetchTimeout(url,{signal:group.signal}))))}
+  catch(e){throw e?.errors?.find(x=>x?.historyDataError)||Error("History connections unavailable; press Refresh to retry.")}
+  finally{group.abort()}
+}
+function historyDataError(message){const e=Error(message);e.historyDataError=true;return e}
+function parseYear(j,symbol){
+  const res=j?.chart?.result?.[0],meta=res?.meta;
+  if(j?.chart?.error||!res||!Array.isArray(res.timestamp))throw historyDataError("No usable history returned for this ticker.");
+  if(String(meta?.symbol||"").toUpperCase()!==symbol.toUpperCase())throw historyDataError("History ticker does not match the requested stock.");
+  if(meta.currency!=="USD")throw historyDataError("USD history unavailable for this ticker.");
+  const q=res.indicators?.quote?.[0]||{};
+  // Keep dates aligned; do not mix dividend-adjusted closes with daily highs/lows.
+  const rows=res.timestamp.map((t,i)=>({t,c:q.close?.[i],h:q.high?.[i],l:q.low?.[i]}))
+    .filter(x=>Number.isFinite(x.t)&&x.t<=nowUnix()&&positive(x.c)).sort((a,b)=>a.t-b.t);
+  const current=rows.filter(x=>x.t>=yearStartUnix()&&x.t<Date.UTC(YEAR+1,0,1)/1000);
+  if(!current.length)throw historyDataError(`No ${YEAR} daily history returned for this ticker.`);
+  const before=rows.filter(x=>x.t<yearStartUnix());
+  const highs=current.map(x=>x.h).filter(positive),lows=current.map(x=>x.l).filter(positive);
+  return {
+    yearHigh:highs.length?Math.max(...highs):null,yearLow:lows.length?Math.min(...lows):null,
+    yearAvg:current.reduce((sum,x)=>sum+x.c,0)/current.length,
+    yearFirst:before.length?before[before.length-1].c:current[0].c,
+    yearBaseline:before.length?"previous-year close":"first available close",
+    yearLast:current[current.length-1].c,yearLastDate:new Date(current[current.length-1].t*1000).toISOString().slice(0,10),
+    yearAt:Date.now(),historyYear:YEAR,historySchema:HISTORY_SCHEMA,historyError:""
+  };
+}
+function hasYear(x){return x?.historySchema===HISTORY_SCHEMA&&x.historyYear===YEAR&&positive(x.yearAvg)&&positive(x.yearFirst)&&positive(x.yearLast)&&positive(x.yearAt)}
+function currentData(x={}){
+  if(!x||typeof x!=="object")return {};
+  if(hasYear(x))return x;
+  const clean={...x};
+  ["yearHigh","yearLow","yearAvg","yearFirst","yearLast","yearAt","yearLastDate","yearBaseline","historyYear","historySchema"].forEach(k=>delete clean[k]);
+  return clean;
+}
 async function getQuote(symbol,key){
-  const r=await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${encodeURIComponent(key)}`);
-  if(!r.ok)throw Error("quote");
-  const q=await r.json();
-  if(!q||!q.c)throw Error("no quote");
+  const q=await fetchTimeout(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${encodeURIComponent(key)}`);
+  if(!positive(q?.c))throw Error("no quote");
   return {price:q.c,dayDollar:q.d,dayPct:q.dp,dayHigh:q.h,dayLow:q.l,prev:q.pc,quoteAt:Date.now()};
 }
-async function getYear(symbol,key){
-  const yahooMap={SKYHV:"000660.KS"};
-  const y=yahooMap[symbol]||symbol;
-  const r=await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(y)}?period1=${yearStartUnix()}&period2=${nowUnix()}&interval=1d&events=history`);
-  if(!r.ok)throw Error("history");
-  const j=await r.json(), res=j?.chart?.result?.[0];
-  if(!res)throw Error("no history");
-  const q=res.indicators?.quote?.[0]||{};
-  const adj=res.indicators?.adjclose?.[0]?.adjclose||q.close||[];
-  const closes=adj.filter(Number.isFinite), highs=(q.high||[]).filter(Number.isFinite), lows=(q.low||[]).filter(Number.isFinite);
-  if(!closes.length)throw Error("no prices");
-  const meta=res.meta||{};
-  const price=Number.isFinite(meta.regularMarketPrice)?meta.regularMarketPrice:closes[closes.length-1];
-  const prev=Number.isFinite(meta.chartPreviousClose)?meta.chartPreviousClose:(closes.length>1?closes[closes.length-2]:null);
-  return {price,dayPct:Number.isFinite(prev)?(price/prev-1)*100:null,
-    yearHigh:highs.length?Math.max(...highs):Math.max(...closes),
-    yearLow:lows.length?Math.min(...lows):Math.min(...closes),
-    yearAvg:closes.reduce((a,b)=>a+b,0)/closes.length,
-    yearFirst:closes[0],yearLast:closes[closes.length-1],yearAt:Date.now()};
+async function getYear(symbol){
+  const start=Date.UTC(YEAR-1,11,15)/1000;
+  const path=`/v8/finance/chart/${encodeURIComponent(symbol)}?period1=${start}&period2=${nowUnix()}&interval=1d&events=history`;
+  return tryUrls(yahooUrls(path),j=>parseYear(j,symbol));
 }
 function calculated(x){
+  x=currentData(x);
+  if(hasYear(x)&&positive(x.price)&&new Date(x.quoteAt).getFullYear()===YEAR){
+    // Cached yearly ranges must include new highs/lows in the latest quote.
+    x={...x,
+      yearHigh:positive(x.yearHigh)?Math.max(x.yearHigh,x.price,...[x.dayHigh].filter(positive)):null,
+      yearLow:positive(x.yearLow)?Math.min(x.yearLow,x.price,...[x.dayLow].filter(positive)):null};
+  }
   const price=x.price??x.yearLast;
   const belowHigh=Number.isFinite(price)&&Number.isFinite(x.yearHigh)?(price/x.yearHigh-1)*100:null;
   const aboveLow=Number.isFinite(price)&&Number.isFinite(x.yearLow)?(price/x.yearLow-1)*100:null;
@@ -174,7 +225,7 @@ function calculated(x){
 function label(x){
   if(!Number.isFinite(x.belowHigh))return "Year range unavailable";
   const d=Math.abs(x.belowHigh);
-  if(d<=3)return "Near 2026 high";
+  if(d<=3)return `Near ${YEAR} high`;
   if(d<=10)return "Small pullback";
   if(d<=20)return "Moderate pullback";
   return "Deep pullback";
@@ -199,9 +250,14 @@ function allRows(){
   }[mode];
   return a.sort(sorter);
 }
+function historyNote(x){
+  if(x.historyError)return `${hasYear(x)?"Saved history; update failed":"History unavailable"}: ${x.historyError}`;
+  if(hasYear(x))return `History through ${x.yearLastDate}. ${x.yearBaseline==="first available close"?"Gain/loss uses the first available close.":""}`;
+  return "Yearly history has not loaded yet. Press Refresh.";
+}
 function mini(items){
   if(!items.length)return '<div class="name">Waiting for data…</div>';
-  return items.slice(0,5).map(x=>`<div class="mini"><div><span class="ticker">${x.symbol}</span><div class="name">${x.name}</div></div><b class="${cls(x.dayPct)}">${pct(x.dayPct)}</b></div>`).join("");
+  return items.slice(0,5).map(x=>`<div class="mini"><div><span class="ticker">${safe(x.symbol)}</span><div class="name">${safe(x.name)}</div></div><b class="${cls(x.dayPct)}">${pct(x.dayPct)}</b></div>`).join("");
 }
 function render(){
   const all=watch.map(w=>calculated({...w,...(data[w.symbol]||{})})).filter(x=>Number.isFinite(x.dayPct));
@@ -211,46 +267,56 @@ function render(){
   $("list").innerHTML=rows.length?rows.map(x=>`
     <article class="stock">
       <div class="stock-top">
-        <div><a href="https://finance.yahoo.com/quote/${encodeURIComponent(x.symbol)}" target="_blank"><div class="symbol">${x.symbol}</div><div class="company">${x.name}</div></a></div>
+        <div><a href="https://finance.yahoo.com/quote/${encodeURIComponent(x.symbol)}" target="_blank" rel="noopener"><div class="symbol">${safe(x.symbol)}</div><div class="company">${safe(x.name)}</div></a></div>
         <div><div class="price">${Number.isFinite(x.price)?"$"+num(x.price):"—"}</div><div class="day ${cls(x.dayPct)}">${pct(x.dayPct)}</div></div>
       </div>
       <div class="metrics">
-        <div class="metric"><div class="label">2026 average close</div><div class="value">${Number.isFinite(x.yearAvg)?"$"+num(x.yearAvg):"—"}</div></div>
-        <div class="metric"><div class="label">Vs. 2026 average</div><div class="value ${cls(x.vsAvg)}">${pct(x.vsAvg)}</div></div>
-        <div class="metric"><div class="label">2026 high</div><div class="value">${Number.isFinite(x.yearHigh)?"$"+num(x.yearHigh):"—"}</div></div>
+        <div class="metric"><div class="label">${YEAR} average close</div><div class="value">${Number.isFinite(x.yearAvg)?"$"+num(x.yearAvg):"—"}</div></div>
+        <div class="metric"><div class="label">Vs. ${YEAR} average</div><div class="value ${cls(x.vsAvg)}">${pct(x.vsAvg)}</div></div>
+        <div class="metric"><div class="label">${YEAR} high</div><div class="value">${Number.isFinite(x.yearHigh)?"$"+num(x.yearHigh):"—"}</div></div>
         <div class="metric"><div class="label">Below high</div><div class="value neg">${Number.isFinite(x.belowHigh)?num(Math.abs(x.belowHigh))+"%":"—"}</div></div>
-        <div class="metric"><div class="label">2026 low</div><div class="value">${Number.isFinite(x.yearLow)?"$"+num(x.yearLow):"—"}</div></div>
+        <div class="metric"><div class="label">${YEAR} low</div><div class="value">${Number.isFinite(x.yearLow)?"$"+num(x.yearLow):"—"}</div></div>
         <div class="metric"><div class="label">Above low</div><div class="value">${Number.isFinite(x.aboveLow)?num(x.aboveLow)+"%":"—"}</div></div>
-        <div class="metric"><div class="label">2026 gain/loss</div><div class="value ${cls(x.ytd)}">${pct(x.ytd)}</div></div>
+        <div class="metric"><div class="label">${YEAR} gain/loss</div><div class="value ${cls(x.ytd)}">${pct(x.ytd)}</div></div>
         <div class="metric"><div class="label">Year range position</div><div class="value">${Number.isFinite(x.range)?num(x.range,0)+"%":"—"}</div></div>
       </div>
-      <div class="rangebar" title="Position inside 2026 high-low range"><div class="rangefill" style="width:${Number.isFinite(x.range)?x.range:0}%"></div></div>
+      <div class="rangebar" title="Position inside ${YEAR} high-low range"><div class="rangefill" style="width:${Number.isFinite(x.range)?x.range:0}%"></div></div>
       <div class="bottom"><span class="tag">${label(x)}${Number.isFinite(x.range)?" • "+num(x.range,0)+"% up the yearly range":""}</span><button class="remove" onclick="removeStock('${x.symbol}')">Remove</button></div>
+      <div class="note" style="margin-top:9px">${safe(historyNote(x))}</div>
     </article>`).join(""):'<div class="empty">No stocks match this view.</div>';
 }
 async function refresh(){
+  if($("refresh").disabled)return;
   const key=$("apiKey").value.trim();
   if(!key){$("status").textContent="Open Settings and enter a free Finnhub API key first.";return}
   stopped=false;$("refresh").disabled=true;
-  let ok=0,fail=0;
-  for(let i=0;i<watch.length;i++){
+  let ok=0,fail=0,historyOK=0,historyFail=0,reused=0;
+  const symbols=watch.map(x=>x.symbol);
+  try{for(let i=0;i<symbols.length;i++){
     if(stopped)break;
-    const s=watch[i].symbol, old=data[s]||{};
-    $("status").textContent=`Loading ${i+1} of ${watch.length}: ${s}. The first full refresh may take about two minutes.`;
-    const needYear=!old.yearAt||(Date.now()-old.yearAt)>12*60*60*1000;
+    const s=symbols[i];
+    if(!watch.some(x=>x.symbol===s))continue;
+    const old=currentData(data[s]);
+    $("status").textContent=`Loading ${i+1} of ${symbols.length}: ${s}. Quotes: ${ok}; yearly histories: ${historyOK+reused}; history failures: ${historyFail}.`;
+    const needYear=!hasYear(old)||Boolean(old.historyError)||(Date.now()-old.yearAt)>HISTORY_TTL;
     try{
-      const results=await Promise.allSettled([getQuote(s,key),needYear?getYear(s,key):Promise.resolve({})]);
+      const results=await Promise.allSettled([getQuote(s,key),needYear?getYear(s):Promise.resolve({})]);
       const merged={...old};
+      if(results[1].status==="fulfilled"){
+        Object.assign(merged,results[1].value);
+        if(needYear)historyOK++;else reused++;
+      }else{historyFail++;merged.historyError=String(results[1].reason?.message||"History unavailable; press Refresh to retry.")}
+      // Quotes own the live price and daily change. History owns yearly fields only.
       if(results[0].status==="fulfilled")Object.assign(merged,results[0].value);
-      if(results[1].status==="fulfilled")Object.assign(merged,results[1].value);
-      data[s]=merged;
+      if(watch.some(x=>x.symbol===s))data[s]=merged;
       if(results[0].status==="fulfilled")ok++;else fail++;
     }catch(e){fail++}
     save();render();
-    await sleep(needYear?2200:1050);
+    if(!stopped&&i<symbols.length-1)await sleep(1100);
   }
-  $("refresh").disabled=false;
-  $("status").textContent=stopped?`Stopped. ${ok} quotes loaded.`:`Finished: ${ok} quotes loaded; ${fail} unavailable. Updated ${new Date().toLocaleTimeString()}.`;
+  $("status").textContent=`${stopped?"Stopped":"Finished"}: ${ok} quotes loaded; ${fail} quotes unavailable. ${historyOK} yearly histories loaded; ${reused} reused; ${historyFail} history updates unavailable.${historyFail?" Saved history is retained where available. Press Refresh to retry.":""} Updated ${new Date().toLocaleTimeString()}.`;
+  }catch{$("status").textContent="Refresh interrupted. Data is shown, but browser storage may be full or unavailable."}
+  finally{$("refresh").disabled=false}
 }
 window.removeStock=s=>{watch=watch.filter(x=>x.symbol!==s);delete data[s];save();render()};
 $("refresh").onclick=refresh;$("stop").onclick=()=>stopped=true;
@@ -267,12 +333,14 @@ document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{
 $("saveKey").onclick=()=>{localStorage.setItem("finnhubKey",$("apiKey").value.trim());$("status").textContent="API key saved on this device."};
 $("add").onclick=()=>{
   const s=$("newTicker").value.trim().toUpperCase().replace(/\s/g,"");
-  if(s&&!watch.some(x=>x.symbol===s)){watch.push({symbol:s,name:s});save();render()}
+  if(!validSymbol(s)){$("status").textContent="Enter a valid ticker, for example AMZN or BRK.B.";return}
+  if(!watch.some(x=>x.symbol===s)){watch.push({symbol:s,name:s});save();render()}
   $("newTicker").value="";
 };
 $("reset").onclick=()=>{
-  if(confirm("Restore the original 49-stock list?")){watch=ORIGINAL.map(x=>({symbol:x[0],name:x[1]}));data={};save();render()}
+  if(confirm(`Restore the original ${ORIGINAL.length}-stock list?`)){stopped=true;watch=ORIGINAL.map(x=>({symbol:x[0],name:x[1]}));data={};save();render()}
 };
+document.querySelectorAll(".sub, #sort option").forEach(el=>el.textContent=el.textContent.replace(/2026/g,String(YEAR)));
 render();
 </script>
 </body>
