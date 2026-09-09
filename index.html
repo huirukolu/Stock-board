@@ -117,7 +117,7 @@ const ORIGINAL=[
 ["FN","Fabrinet"],["MELI","MercadoLibre"],["PYPL","PayPal"],["KLAC","KLA"],["FLEX","Flex"],
 ["AMD","Advanced Micro Devices"],["NBIS","Nebius Group"],["MRVL","Marvell Technology"],["CMI","Cummins"],
 ["CAT","Caterpillar"],["EQT","EQT"],["HWM","Howmet Aerospace"],["ET","Energy Transfer"],
-["ONTO","Onto Innovation"],["SKYHV","SK hynix ADR"],["RKLB","Rocket Lab"],["ETN","Eaton"],
+["ONTO","Onto Innovation"],["SKHY","SK hynix ADR"],["RKLB","Rocket Lab"],["ETN","Eaton"],
 ["SNDK","SanDisk"],["HPE","Hewlett Packard Enterprise"],["IONQ","IonQ"],["ZTS","Zoetis"],
 ["WDC","Western Digital"],["DELL","Dell Technologies"],["CSCO","Cisco Systems"],["DUK","Duke Energy"],["ANET","Arista Networks"]
 ];
@@ -125,15 +125,34 @@ const $=id=>document.getElementById(id);
 const YEAR=new Date().getFullYear(),HISTORY_SCHEMA=2,HISTORY_TTL=12*60*60*1000;
 function readSaved(key,fallback){try{return JSON.parse(localStorage.getItem(key)||"null")??fallback}catch{return fallback}}
 const validSymbol=s=>typeof s==="string"&&/^[A-Z0-9^][A-Z0-9.^=-]{0,19}$/.test(s);
+// Nasdaq's temporary SKHYV ticker became SKHY on July 13, 2026.
+// SKYHV was a typo in this board. Neither alias may supply quote/history data.
+const canonicalSymbol=s=>s==="SKYHV"||s==="SKHYV"?"SKHY":s;
 let watch=readSaved("steveWatchV2",ORIGINAL.map(x=>({symbol:x[0],name:x[1]})));
 if(!Array.isArray(watch))watch=ORIGINAL.map(x=>({symbol:x[0],name:x[1]}));
-watch=watch.filter(x=>x&&validSymbol(x.symbol)).map(x=>({symbol:x.symbol,name:String(x.name||x.symbol)}));
+const hadLegacySkHynix=watch.some(x=>x&&canonicalSymbol(x.symbol)!==x.symbol);
+const seenSymbols=new Set();
+watch=watch.filter(x=>x&&validSymbol(x.symbol)).map(x=>{
+  const symbol=canonicalSymbol(x.symbol);
+  return {symbol,name:symbol==="SKHY"?"SK hynix ADR":String(x.name||symbol)};
+}).filter(x=>!seenSymbols.has(x.symbol)&&seenSymbols.add(x.symbol));
 let data=readSaved("steveDataV2",{});
 if(!data||typeof data!=="object"||Array.isArray(data))data={};
 let stopped=false, view="all";
 $("apiKey").value=localStorage.getItem("finnhubKey")||"";
 
 function save(){localStorage.setItem("steveWatchV2",JSON.stringify(watch));localStorage.setItem("steveDataV2",JSON.stringify(data))}
+// Discard affected prices and history; changing only the label would retain bad data.
+// This one-time repair leaves the other stocks and the Finnhub key intact.
+const hasLegacySkHynixData=["SKYHV","SKHYV"].some(s=>Object.prototype.hasOwnProperty.call(data,s));
+if(readSaved("steveSkHynixRepairV1",false)!==true||hadLegacySkHynix||hasLegacySkHynixData){
+  const repairedSkHynix=hadLegacySkHynix||hasLegacySkHynixData||Object.prototype.hasOwnProperty.call(data,"SKHY");
+  ["SKYHV","SKHYV","SKHY"].forEach(s=>delete data[s]);
+  try{
+    save();localStorage.setItem("steveSkHynixRepairV1","true");
+    if(repairedSkHynix)$("status").textContent="SK hynix now uses SKHY. Old figures cleared; press Refresh to load fresh data.";
+  }catch{$("status").textContent="SK hynix now uses SKHY, but this browser could not save the correction. Press Refresh for fresh data."}
+}
 const positive=v=>Number.isFinite(v)&&v>0;
 const safe=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 function num(v,d=2){return Number.isFinite(v)?v.toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d}):"—"}
@@ -332,9 +351,16 @@ document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{
 });
 $("saveKey").onclick=()=>{localStorage.setItem("finnhubKey",$("apiKey").value.trim());$("status").textContent="API key saved on this device."};
 $("add").onclick=()=>{
-  const s=$("newTicker").value.trim().toUpperCase().replace(/\s/g,"");
+  const entered=$("newTicker").value.trim().toUpperCase().replace(/\s/g,"");
+  const s=canonicalSymbol(entered);
   if(!validSymbol(s)){$("status").textContent="Enter a valid ticker, for example AMZN or BRK.B.";return}
-  if(!watch.some(x=>x.symbol===s)){watch.push({symbol:s,name:s});save();render()}
+  if(!watch.some(x=>x.symbol===s)){
+    watch.push({symbol:s,name:s==="SKHY"?"SK hynix ADR":s});
+    // Re-adding a stock must fetch fresh figures, not revive an orphaned cache.
+    if(s==="SKHY")delete data[s];
+    save();render();
+  }
+  if(s!==entered)$("status").textContent="SK hynix uses SKHY. Press Refresh to load its data.";
   $("newTicker").value="";
 };
 $("reset").onclick=()=>{
