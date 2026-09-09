@@ -100,8 +100,12 @@ summary{font-weight:850;cursor:pointer}.settings{display:grid;gap:9px;margin-top
     <div class="settings">
       <input id="apiKey" type="password" placeholder="Paste free Finnhub API key">
       <button id="saveKey">Save key on this device</button>
+      <label for="historyWorker">Yearly history connection</label>
+      <input id="historyWorker" type="url" placeholder="https://your-worker.workers.dev" autocomplete="off" autocapitalize="none" spellcheck="false">
+      <button id="saveHistoryWorker">Save history connection</button>
+      <div id="historyConnectionStatus" class="note" role="status" aria-live="polite"></div>
       <div class="note">
-        Your key is sent only to Finnhub. Current quotes come from Finnhub; yearly history comes from Yahoo, with public relay fallbacks. Later refreshes reuse successful history for 12 hours. Failed history is retried on Refresh, and saved history is labeled if an update fails. The average uses daily closing prices; year gain/loss starts at the last available close before January 1 (or the first available close for a new listing). Free feeds can be delayed or unavailable for some foreign or OTC symbols. Verify prices in Fidelity or Robinhood before trading.
+        Your key is sent only to Finnhub. For yearly figures, enter the address of your deployed Stock Board Cloudflare Worker. The board requests public Yahoo history through that connection; your Finnhub key is never sent there. If the connection is unavailable, the board also tries public Yahoo connections. Later refreshes reuse successful history for 12 hours. Failed history is retried on Refresh, and saved history is labeled if an update fails. The average uses daily closing prices; year gain/loss starts at the last available close before January 1 (or the first available close for a new listing). Free feeds can be delayed or unavailable for some foreign or OTC symbols. Verify prices in Fidelity or Robinhood before trading.
       </div>
     </div>
   </details>
@@ -140,6 +144,24 @@ let data=readSaved("steveDataV2",{});
 if(!data||typeof data!=="object"||Array.isArray(data))data={};
 let stopped=false, view="all";
 $("apiKey").value=localStorage.getItem("finnhubKey")||"";
+let historyWorker="";
+function normalizeHistoryWorker(value){
+  const text=String(value||"").trim();
+  if(!text)return "";
+  let url;try{url=new URL(text)}catch{throw Error("Enter the full history connection address, beginning with https://.")}
+  if(url.protocol!=="https:"||url.username||url.password||url.search||url.hash||!/^\/(?:yahoo\/?)?$/.test(url.pathname)){
+    throw Error("Enter only the HTTPS address of your Stock Board Worker, without a key or extra link parameters.");
+  }
+  return url.origin;
+}
+function showHistoryConnection(){
+  $("historyConnectionStatus").textContent=historyWorker
+    ?"History connection saved. Press Refresh to load yearly figures."
+    :"No dedicated history connection is saved on this device. Public connections may be unavailable.";
+}
+try{historyWorker=normalizeHistoryWorker(localStorage.getItem("steveHistoryWorkerV1"))}catch{}
+$("historyWorker").value=historyWorker;
+showHistoryConnection();
 
 function save(){localStorage.setItem("steveWatchV2",JSON.stringify(watch));localStorage.setItem("steveDataV2",JSON.stringify(data))}
 // Discard affected prices and history; changing only the label would retain bad data.
@@ -223,7 +245,25 @@ async function getQuote(symbol,key){
 async function getYear(symbol){
   const start=Date.UTC(YEAR-1,11,15)/1000;
   const path=`/v8/finance/chart/${encodeURIComponent(symbol)}?period1=${start}&period2=${nowUnix()}&interval=1d&events=history`;
-  return tryUrls(yahooUrls(path),j=>parseYear(j,symbol));
+  let workerError;
+  if(historyWorker){
+    try{
+      // This endpoint receives public history requests only, never the Finnhub key.
+      const url=new URL("/yahoo",historyWorker);
+      url.searchParams.set("path",path);
+      return parseYear(await fetchTimeout(url.href),symbol);
+    }catch(e){workerError=e}
+  }
+  try{return await tryUrls(yahooUrls(path),j=>parseYear(j,symbol))}
+  catch(e){
+    if(e?.historyDataError)throw e;
+    if(workerError?.historyDataError)throw workerError;
+    if(historyWorker){
+      const detail=workerError?.status?` (HTTP ${workerError.status})`:"";
+      throw Error(`The saved history connection failed${detail}, and public connections are unavailable. Check the history address in Settings and retry.`);
+    }
+    throw Error("Public history connections are unavailable. Add your Stock Board history connection in Settings, then press Refresh.");
+  }
 }
 function calculated(x){
   x=currentData(x);
@@ -350,6 +390,15 @@ document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{
   render();
 });
 $("saveKey").onclick=()=>{localStorage.setItem("finnhubKey",$("apiKey").value.trim());$("status").textContent="API key saved on this device."};
+$("saveHistoryWorker").onclick=()=>{
+  try{
+    if($("refresh").disabled){$("historyConnectionStatus").textContent="Wait for this refresh to finish, then save the history connection.";return}
+    const next=normalizeHistoryWorker($("historyWorker").value);
+    localStorage.setItem("steveHistoryWorkerV1",next);
+    historyWorker=next;$("historyWorker").value=next;
+    showHistoryConnection();
+  }catch(e){$("historyConnectionStatus").textContent=e?.message||"This browser could not save the history connection."}
+};
 $("add").onclick=()=>{
   const entered=$("newTicker").value.trim().toUpperCase().replace(/\s/g,"");
   const s=canonicalSymbol(entered);
