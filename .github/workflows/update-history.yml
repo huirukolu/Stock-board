@@ -1,0 +1,153 @@
+name: Update Stock Board History
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 01:30 UTC = 6:30 PM PDT / 5:30 PM PST. Tue-Sat covers Mon-Fri market days.
+    - cron: '30 1 * * 2-6'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/update-history.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  update-history:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Download and calculate yearly history
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import datetime as dt
+          import json
+          import time
+          import urllib.parse
+          import urllib.request
+          from pathlib import Path
+
+          TICKERS = [
+              "VTI","TSM","QQQM","META","MU","TEL","NVDA","AVGO","GEV","APH",
+              "NVT","AMAT","SOXQ","TTE","ALGM","LRCX","RTX","RMBS","BYDDY","CEG",
+              "VST","VRT","CRDO","GLO","FN","MELI","PYPL","KLAC","FLEX","AMD",
+              "NBIS","MRVL","CMI","CAT","EQT","HWM","ET","ONTO","SKHY","RKLB",
+              "ETN","SNDK","HPE","IONQ","ZTS","WDC","DELL","CSCO","DUK","ANET"
+          ]
+
+          now = dt.datetime.now(dt.timezone.utc)
+          year = now.year
+          year_start = dt.datetime(year, 1, 1, tzinfo=dt.timezone.utc)
+          fetch_start = dt.datetime(year - 1, 12, 15, tzinfo=dt.timezone.utc)
+          next_year = dt.datetime(year + 1, 1, 1, tzinfo=dt.timezone.utc)
+
+          def fetch_json(symbol):
+              params = urllib.parse.urlencode({
+                  "period1": int(fetch_start.timestamp()),
+                  "period2": int((now + dt.timedelta(days=1)).timestamp()),
+                  "interval": "1d",
+                  "events": "history",
+              })
+              path = f"/v8/finance/chart/{urllib.parse.quote(symbol)}?{params}"
+              last = None
+              for host in ("query1.finance.yahoo.com", "query2.finance.yahoo.com"):
+                  req = urllib.request.Request(
+                      f"https://{host}{path}",
+                      headers={
+                          "User-Agent": "Mozilla/5.0 StockBoardHistory/1.0",
+                          "Accept": "application/json,text/plain,*/*",
+                      },
+                  )
+                  try:
+                      with urllib.request.urlopen(req, timeout=20) as r:
+                          return json.load(r)
+                  except Exception as e:
+                      last = e
+                      time.sleep(1)
+              raise last or RuntimeError("Yahoo request failed")
+
+          def calculate(symbol, payload):
+              chart = payload.get("chart") or {}
+              if chart.get("error"):
+                  raise RuntimeError(str(chart["error"]))
+              results = chart.get("result") or []
+              if not results:
+                  raise RuntimeError("No chart result")
+              res = results[0]
+              meta = res.get("meta") or {}
+              if str(meta.get("symbol", "")).upper() != symbol.upper():
+                  raise RuntimeError("Ticker mismatch")
+              if meta.get("currency") != "USD":
+                  raise RuntimeError(f"Currency is {meta.get('currency')}, not USD")
+
+              timestamps = res.get("timestamp") or []
+              quote = ((res.get("indicators") or {}).get("quote") or [{}])[0]
+              closes = quote.get("close") or []
+              highs = quote.get("high") or []
+              lows = quote.get("low") or []
+              rows = []
+              for i, ts in enumerate(timestamps):
+                  c = closes[i] if i < len(closes) else None
+                  h = highs[i] if i < len(highs) else None
+                  l = lows[i] if i < len(lows) else None
+                  if isinstance(c, (int, float)) and c > 0 and ts <= int(now.timestamp()):
+                      rows.append((ts, float(c), h, l))
+              rows.sort()
+              current = [r for r in rows if int(year_start.timestamp()) <= r[0] < int(next_year.timestamp())]
+              if not current:
+                  raise RuntimeError(f"No {year} daily history")
+              before = [r for r in rows if r[0] < int(year_start.timestamp())]
+              good_highs = [float(r[2]) for r in current if isinstance(r[2], (int, float)) and r[2] > 0]
+              good_lows = [float(r[3]) for r in current if isinstance(r[3], (int, float)) and r[3] > 0]
+              baseline = before[-1][1] if before else current[0][1]
+              return {
+                  "yearHigh": max(good_highs) if good_highs else None,
+                  "yearLow": min(good_lows) if good_lows else None,
+                  "yearAvg": sum(r[1] for r in current) / len(current),
+                  "yearFirst": baseline,
+                  "yearBaseline": "previous-year close" if before else "first available close",
+                  "yearLast": current[-1][1],
+                  "yearLastDate": dt.datetime.fromtimestamp(current[-1][0], dt.timezone.utc).date().isoformat(),
+              }
+
+          stocks = {}
+          ok = 0
+          for n, symbol in enumerate(TICKERS, 1):
+              try:
+                  stocks[symbol] = calculate(symbol, fetch_json(symbol))
+                  ok += 1
+                  print(f"[{n}/{len(TICKERS)}] {symbol}: OK")
+              except Exception as e:
+                  stocks[symbol] = {"error": str(e)}
+                  print(f"[{n}/{len(TICKERS)}] {symbol}: ERROR: {e}")
+              time.sleep(0.35)
+
+          output = {
+              "schema": 1,
+              "year": year,
+              "generatedAt": int(time.time() * 1000),
+              "generatedAtIso": now.isoformat(),
+              "successCount": ok,
+              "tickerCount": len(TICKERS),
+              "stocks": stocks,
+          }
+          Path("history.json").write_text(json.dumps(output, indent=2, sort_keys=True) + "\n")
+          print(f"Wrote history.json: {ok}/{len(TICKERS)} tickers succeeded")
+          PY
+
+      - name: Commit history.json
+        shell: bash
+        run: |
+          if git diff --quiet -- history.json && git ls-files --error-unmatch history.json >/dev/null 2>&1; then
+            echo "history.json is unchanged"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add history.json
+          git commit -m "Update Stock Board history"
+          git push
