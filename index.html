@@ -328,7 +328,7 @@ function render(){
   $("list").innerHTML=rows.length?rows.map(x=>`
     <article class="stock">
       <div class="stock-top">
-        <div><a href="https://finance.yahoo.com/quote/${encodeURIComponent(x.symbol)}" target="_blank" rel="noopener"><div class="symbol">${safe(x.symbol)}</div><div class="company">${safe(x.name)}</div></a></div>
+        <div><a href="./x-ray.html?ticker=${encodeURIComponent(x.symbol)}"><div class="symbol">${safe(x.symbol)}</div><div class="company">${safe(x.name)}</div></a></div>
         <div><div class="price">${Number.isFinite(x.price)?"$"+num(x.price):"—"}</div><div class="day ${cls(x.dayPct)}">${pct(x.dayPct)}</div></div>
       </div>
       <div class="metrics">
