@@ -1,0 +1,460 @@
+{
+  "generatedAt": 1789067501305,
+  "generatedAtIso": "2026-09-10T19:11:12.492334+00:00",
+  "schema": 1,
+  "stocks": {
+    "ALGM": {
+      "yearAvg": 41.58234114453972,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 26.3799991607666,
+      "yearHigh": 71.7699966430664,
+      "yearLast": 35.220001220703125,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 26.18000030517578
+    },
+    "AMAT": {
+      "yearAvg": 434.4710471092621,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 256.989990234375,
+      "yearHigh": 739.6699829101562,
+      "yearLast": 455.481201171875,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 265.1000061035156
+    },
+    "AMD": {
+      "yearAvg": 365.87491303372246,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 214.16000366210938,
+      "yearHigh": 584.72998046875,
+      "yearLast": 503.7799072265625,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 188.22000122070312
+    },
+    "ANET": {
+      "yearAvg": 156.82971094385047,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 131.02999877929688,
+      "yearHigh": 214.88999938964844,
+      "yearLast": 189.69000244140625,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 115.41999816894531
+    },
+    "APH": {
+      "yearAvg": 73.85968319666868,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 67.56999969482422,
+      "yearHigh": 89.26000213623047,
+      "yearLast": 80.02020263671875,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 59.005001068115234
+    },
+    "AVGO": {
+      "yearAvg": 370.48528946893066,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 346.1000061035156,
+      "yearHigh": 495.0,
+      "yearLast": 361.7650146484375,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 289.9599914550781
+    },
+    "BYDDY": {
+      "yearAvg": 12.012601196421365,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 12.109999656677246,
+      "yearHigh": 14.460000038146973,
+      "yearLast": 10.039999961853027,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 9.210000038146973
+    },
+    "CAT": {
+      "yearAvg": 807.48021614207,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 572.8699951171875,
+      "yearHigh": 1073.4599609375,
+      "yearLast": 802.2974853515625,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 575.3099975585938
+    },
+    "CEG": {
+      "yearAvg": 285.71647432360345,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 353.2699890136719,
+      "yearHigh": 378.5,
+      "yearLast": 287.92999267578125,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 228.6300048828125
+    },
+    "CMI": {
+      "yearAvg": 616.0813027089731,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 510.45001220703125,
+      "yearHigh": 737.760009765625,
+      "yearLast": 547.0750122070312,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 510.0
+    },
+    "CRDO": {
+      "yearAvg": 178.7704339881853,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 143.88999938964844,
+      "yearHigh": 308.6700134277344,
+      "yearLast": 161.74000549316406,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 86.48500061035156
+    },
+    "CSCO": {
+      "yearAvg": 97.98300576623464,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 77.02999877929688,
+      "yearHigh": 130.3699951171875,
+      "yearLast": 108.19000244140625,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 72.80000305175781
+    },
+    "DELL": {
+      "yearAvg": 279.606184545969,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 125.87999725341797,
+      "yearHigh": 562.989990234375,
+      "yearLast": 516.260009765625,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 110.22000122070312
+    },
+    "DUK": {
+      "yearAvg": 125.21445107873464,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 117.20999908447266,
+      "yearHigh": 134.49000549316406,
+      "yearLast": 119.68000030517578,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 115.0999984741211
+    },
+    "EQT": {
+      "yearAvg": 56.031560820651194,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 53.599998474121094,
+      "yearHigh": 68.23999786376953,
+      "yearLast": 55.2400016784668,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 47.939998626708984
+    },
+    "ET": {
+      "yearAvg": 19.35251449849564,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 16.489999771118164,
+      "yearHigh": 21.84000015258789,
+      "yearLast": 21.71500015258789,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 16.239999771118164
+    },
+    "ETN": {
+      "yearAvg": 390.09046345087836,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 318.510009765625,
+      "yearHigh": 478.0,
+      "yearLast": 408.3800048828125,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 315.760009765625
+    },
+    "FLEX": {
+      "yearAvg": 100.80719311664559,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 60.41999816894531,
+      "yearHigh": 166.86000061035156,
+      "yearLast": 108.66439819335938,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 55.15999984741211
+    },
+    "FN": {
+      "yearAvg": 547.4665329773302,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 455.2799987792969,
+      "yearHigh": 748.8900146484375,
+      "yearLast": 403.010009765625,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 380.3900146484375
+    },
+    "GEV": {
+      "yearAvg": 931.5991309722724,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 653.5700073242188,
+      "yearHigh": 1195.93994140625,
+      "yearLast": 924.1199951171875,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 617.1099853515625
+    },
+    "GLO": {
+      "yearAvg": 5.871676304436832,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 5.659999847412109,
+      "yearHigh": 6.179999828338623,
+      "yearLast": 5.579999923706055,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 5.389999866485596
+    },
+    "HPE": {
+      "yearAvg": 35.42445097906741,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 24.020000457763672,
+      "yearHigh": 64.25,
+      "yearLast": 55.709999084472656,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 19.84000015258789
+    },
+    "HWM": {
+      "yearAvg": 253.1345671725411,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 205.02000427246094,
+      "yearHigh": 310.0,
+      "yearLast": 228.5399932861328,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 204.14999389648438
+    },
+    "IONQ": {
+      "yearAvg": 43.37141623524572,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 44.869998931884766,
+      "yearHigh": 73.6500015258789,
+      "yearLast": 37.1349983215332,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 25.889999389648438
+    },
+    "KLAC": {
+      "yearAvg": 180.58137013870856,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 121.50800323486328,
+      "yearHigh": 307.3699951171875,
+      "yearLast": 177.10000610351562,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 125.05500030517578
+    },
+    "LRCX": {
+      "yearAvg": 278.9942068640207,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 171.17999267578125,
+      "yearHigh": 438.5,
+      "yearLast": 299.1379089355469,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 177.5
+    },
+    "MELI": {
+      "yearAvg": 1832.9346253499818,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 2014.260009765625,
+      "yearHigh": 2342.0,
+      "yearLast": 1915.3699951171875,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 1495.0
+    },
+    "META": {
+      "yearAvg": 618.588898587089,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 660.0900268554688,
+      "yearHigh": 744.0,
+      "yearLast": 645.6699829101562,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 520.260009765625
+    },
+    "MRVL": {
+      "yearAvg": 164.3656648845342,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 84.9800033569336,
+      "yearHigh": 329.8800048828125,
+      "yearLast": 229.36000061035156,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 70.69000244140625
+    },
+    "MU": {
+      "yearAvg": 675.5918219241104,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 285.4100036621094,
+      "yearHigh": 1255.0,
+      "yearLast": 979.1749877929688,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 294.8599853515625
+    },
+    "NBIS": {
+      "yearAvg": 167.375376177661,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 83.70500183105469,
+      "yearHigh": 299.8599853515625,
+      "yearLast": 228.5399932861328,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 73.5199966430664
+    },
+    "NVDA": {
+      "yearAvg": 199.69212306028157,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 186.5,
+      "yearHigh": 236.5399932861328,
+      "yearLast": 217.86729431152344,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 164.27000427246094
+    },
+    "NVT": {
+      "yearAvg": 141.25742816373793,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 101.97000122070312,
+      "yearHigh": 184.63999938964844,
+      "yearLast": 155.3249969482422,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 102.0
+    },
+    "ONTO": {
+      "yearAvg": 257.2623987804258,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 157.86000061035156,
+      "yearHigh": 386.4599914550781,
+      "yearLast": 269.3349914550781,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 161.85000610351562
+    },
+    "PYPL": {
+      "yearAvg": 49.37526017117362,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 58.380001068115234,
+      "yearHigh": 62.72999954223633,
+      "yearLast": 53.1150016784668,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 38.459999084472656
+    },
+    "QQQM": {
+      "yearAvg": 274.28109899972907,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 252.9199981689453,
+      "yearHigh": 308.2099914550781,
+      "yearLast": 292.04998779296875,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 228.75
+    },
+    "RKLB": {
+      "yearAvg": 83.40653195684355,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 69.76000213623047,
+      "yearHigh": 151.0,
+      "yearLast": 62.11000061035156,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 56.13199996948242
+    },
+    "RMBS": {
+      "yearAvg": 109.79138721620416,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 91.88999938964844,
+      "yearHigh": 174.10000610351562,
+      "yearLast": 85.55999755859375,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 77.88999938964844
+    },
+    "RTX": {
+      "yearAvg": 196.01632478747064,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 183.39999389648438,
+      "yearHigh": 226.8800048828125,
+      "yearLast": 197.03419494628906,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 170.77999877929688
+    },
+    "SKHY": {
+      "yearAvg": 159.21113673123446,
+      "yearBaseline": "first available close",
+      "yearFirst": 168.00999450683594,
+      "yearHigh": 199.8699951171875,
+      "yearLast": 189.72000122070312,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 124.80000305175781
+    },
+    "SNDK": {
+      "yearAvg": 1151.804275424494,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 237.3800048828125,
+      "yearHigh": 2354.389892578125,
+      "yearLast": 1699.6199951171875,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 244.0
+    },
+    "SOXQ": {
+      "yearAvg": 81.60468215060372,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 55.77000045776367,
+      "yearHigh": 115.33499908447266,
+      "yearLast": 91.69000244140625,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 55.779998779296875
+    },
+    "TEL": {
+      "yearAvg": 213.68595392304348,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 227.50999450683594,
+      "yearHigh": 252.55999755859375,
+      "yearLast": 204.10000610351562,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 190.27000427246094
+    },
+    "TSM": {
+      "yearAvg": 387.9139014448045,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 303.8900146484375,
+      "yearHigh": 479.0,
+      "yearLast": 428.7349853515625,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 311.70001220703125
+    },
+    "TTE": {
+      "yearAvg": 83.3282080633792,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 65.41999816894531,
+      "yearHigh": 94.16999816894531,
+      "yearLast": 91.62000274658203,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 62.15999984741211
+    },
+    "VRT": {
+      "yearAvg": 272.80277468289944,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 162.00999450683594,
+      "yearHigh": 379.93499755859375,
+      "yearLast": 247.4499969482422,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 158.77000427246094
+    },
+    "VST": {
+      "yearAvg": 155.72536966842034,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 161.3300018310547,
+      "yearHigh": 182.55999755859375,
+      "yearLast": 147.968994140625,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 132.66000366210938
+    },
+    "VTI": {
+      "yearAvg": 354.63450719579794,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 335.2699890136719,
+      "yearHigh": 385.1199951171875,
+      "yearLast": 373.1300048828125,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 310.3999938964844
+    },
+    "WDC": {
+      "yearAvg": 410.2123108792167,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 172.27000427246094,
+      "yearHigh": 799.8699951171875,
+      "yearLast": 464.79998779296875,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 176.6999969482422
+    },
+    "ZTS": {
+      "yearAvg": 99.17739881394226,
+      "yearBaseline": "previous-year close",
+      "yearFirst": 125.81999969482422,
+      "yearHigh": 132.49000549316406,
+      "yearLast": 73.29000091552734,
+      "yearLastDate": "2026-09-10",
+      "yearLow": 71.0
+    }
+  },
+  "successCount": 50,
+  "tickerCount": 50,
+  "year": 2026
+}
