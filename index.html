@@ -55,7 +55,7 @@ summary{font-weight:850;cursor:pointer}.settings{display:grid;gap:9px;margin-top
 <body>
 <header>
   <h1>Steve's Stock Board</h1>
-  <div class="sub">Today’s movement • 2026 average • high, low and current range position • GitHub history</div>
+  <div class="sub">Today’s movement • 2026 average • high, low and current range position</div>
 </header>
 <main>
   <div class="controls">
@@ -101,7 +101,7 @@ summary{font-weight:850;cursor:pointer}.settings{display:grid;gap:9px;margin-top
       <input id="apiKey" type="password" placeholder="Paste free Finnhub API key">
       <button id="saveKey">Save key on this device</button>
       <div class="note">
-        Your key is sent only to Finnhub. Yearly figures are loaded from a history.json file updated automatically by GitHub Actions, avoiding browser CORS failures. Public Yahoo connections are kept only as a fallback for newly added tickers. Later refreshes reuse successful history for 12 hours. Failed history is retried on Refresh, and saved history is retained if an update fails. The average uses daily closing prices; year gain/loss starts at the last available close before January 1 (or the first available close for a new listing). Free public feeds can occasionally be delayed or unavailable. Verify prices in Fidelity or Robinhood before trading.
+        Your key is sent only to Finnhub. Current quotes come from Finnhub; yearly history comes from Yahoo, with public relay fallbacks. Later refreshes reuse successful history for 12 hours. Failed history is retried on Refresh, and saved history is labeled if an update fails. The average uses daily closing prices; year gain/loss starts at the last available close before January 1 (or the first available close for a new listing). Free feeds can be delayed or unavailable for some foreign or OTC symbols. Verify prices in Fidelity or Robinhood before trading.
       </div>
     </div>
   </details>
@@ -140,6 +140,7 @@ let data=readSaved("steveDataV2",{});
 if(!data||typeof data!=="object"||Array.isArray(data))data={};
 let stopped=false, view="all";
 $("apiKey").value=localStorage.getItem("finnhubKey")||"";
+
 function save(){localStorage.setItem("steveWatchV2",JSON.stringify(watch));localStorage.setItem("steveDataV2",JSON.stringify(data))}
 // Discard affected prices and history; changing only the label would retain bad data.
 // This one-time repair leaves the other stocks and the Finnhub key intact.
@@ -174,22 +175,14 @@ async function fetchTimeout(url,opts={},ms=12000){
 }
 function yahooUrls(path){
   const a=`https://query1.finance.yahoo.com${path}`,b=`https://query2.finance.yahoo.com${path}`;
-  // Public history only. The Finnhub key never enters any of these URLs.
-  return [
-    a,b,
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(a)}`,
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(b)}`,
-    `https://api.cors.lol/?url=${encodeURIComponent(a)}`,
-    `https://api.cors.lol/?url=${encodeURIComponent(b)}`
-  ];
+  // Relay only public Yahoo requests. The Finnhub key never enters these URLs.
+  return [a,b,`https://api.allorigins.win/raw?url=${encodeURIComponent(a)}`,`https://api.allorigins.win/raw?url=${encodeURIComponent(b)}`];
 }
 async function tryUrls(urls,validate=x=>x){
-  let lastError;
-  for(const url of urls){
-    try{return validate(await fetchTimeout(url,{},10000))}
-    catch(e){if(e?.historyDataError)throw e;lastError=e}
-  }
-  throw lastError||Error("History connections unavailable; press Refresh to retry.");
+  const group=new AbortController();
+  try{return await Promise.any(urls.map(async url=>validate(await fetchTimeout(url,{signal:group.signal}))))}
+  catch(e){throw e?.errors?.find(x=>x?.historyDataError)||Error("History connections unavailable; press Refresh to retry.")}
+  finally{group.abort()}
 }
 function historyDataError(message){const e=Error(message);e.historyDataError=true;return e}
 function parseYear(j,symbol){
@@ -227,45 +220,10 @@ async function getQuote(symbol,key){
   if(!positive(q?.c))throw Error("no quote");
   return {price:q.c,dayDollar:q.d,dayPct:q.dp,dayHigh:q.h,dayLow:q.l,prev:q.pc,quoteAt:Date.now()};
 }
-let repoHistoryPromise=null;
-async function getRepoHistory(){
-  if(repoHistoryPromise)return repoHistoryPromise;
-  repoHistoryPromise=(async()=>{
-    try{
-      const r=await fetch(`./history.json?v=${Date.now()}`,{cache:"no-store"});
-      if(!r.ok)throw Error(`history.json HTTP ${r.status}`);
-      const j=await r.json();
-      return j&&j.year===YEAR&&j.stocks&&typeof j.stocks==="object"?j:null;
-    }catch{ return null; }
-  })();
-  return repoHistoryPromise;
-}
-function repoYearEntry(j,symbol){
-  const x=j?.stocks?.[symbol];
-  if(!x||x.error)return null;
-  const out={
-    yearHigh:Number(x.yearHigh),yearLow:Number(x.yearLow),yearAvg:Number(x.yearAvg),
-    yearFirst:Number(x.yearFirst),yearBaseline:String(x.yearBaseline||"previous-year close"),
-    yearLast:Number(x.yearLast),yearLastDate:String(x.yearLastDate||""),
-    yearAt:Number(j.generatedAt||Date.now()),historyYear:YEAR,historySchema:HISTORY_SCHEMA,historyError:""
-  };
-  return positive(out.yearAvg)&&positive(out.yearFirst)&&positive(out.yearLast)?out:null;
-}
 async function getYear(symbol){
-  // First choice: history.json generated server-side by GitHub Actions. Because it is
-  // served from this same GitHub Pages site, the browser has no Yahoo CORS problem.
-  const repo=await getRepoHistory();
-  const saved=repoYearEntry(repo,symbol);
-  if(saved)return saved;
-
-  // Fallback for a newly-added ticker before the next GitHub history update.
   const start=Date.UTC(YEAR-1,11,15)/1000;
   const path=`/v8/finance/chart/${encodeURIComponent(symbol)}?period1=${start}&period2=${nowUnix()}&interval=1d&events=history`;
-  try{return await tryUrls(yahooUrls(path),j=>parseYear(j,symbol))}
-  catch(e){
-    if(e?.historyDataError)throw e;
-    throw Error("Yearly history is waiting for the next GitHub history update.");
-  }
+  return tryUrls(yahooUrls(path),j=>parseYear(j,symbol));
 }
 function calculated(x){
   x=currentData(x);
@@ -328,7 +286,7 @@ function render(){
   $("list").innerHTML=rows.length?rows.map(x=>`
     <article class="stock">
       <div class="stock-top">
-        <div><a href="./x-ray.html?ticker=${encodeURIComponent(x.symbol)}"><div class="symbol">${safe(x.symbol)}</div><div class="company">${safe(x.name)}</div></a></div>
+        <div><a href="https://finance.yahoo.com/quote/${encodeURIComponent(x.symbol)}" target="_blank" rel="noopener"><div class="symbol">${safe(x.symbol)}</div><div class="company">${safe(x.name)}</div></a></div>
         <div><div class="price">${Number.isFinite(x.price)?"$"+num(x.price):"—"}</div><div class="day ${cls(x.dayPct)}">${pct(x.dayPct)}</div></div>
       </div>
       <div class="metrics">
