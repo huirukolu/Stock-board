@@ -46,14 +46,9 @@ button{font-weight:750}.primary{background:#173b63;border-color:#2d73b7}
 details{margin-top:16px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:13px}
 summary{font-weight:850;cursor:pointer}.settings{display:grid;gap:9px;margin-top:12px}.note{color:var(--muted);font-size:12px;line-height:1.45}
 .empty{text-align:center;color:var(--muted);padding:28px}
-.attention{margin:4px 0 12px;background:linear-gradient(180deg,#142131,#0e1721);border:1px solid #34506d;border-radius:15px;padding:12px}
-.attentionHead{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.attention h2{font-size:17px;margin:0}.attentionStamp{font-size:11px;color:var(--muted);text-align:right}
-.attentionGrid{display:grid;gap:8px;margin-top:9px}.attentionItem{display:grid;grid-template-columns:auto 1fr auto;gap:9px;align-items:center;background:rgba(255,255,255,.035);border:1px solid var(--line);border-radius:11px;padding:9px}
-.attentionRank{width:28px;height:28px;display:grid;place-items:center;border-radius:99px;background:#142a43;border:1px solid #2d73b7;font-weight:900}.attentionTicker{font-weight:900;font-size:15px}.attentionWhy{font-size:12px;line-height:1.35;color:#c8d2de;margin-top:2px}
-.attentionAction{width:auto;padding:7px 9px;font-size:12px;white-space:nowrap}.attentionEmpty{color:var(--muted);font-size:12px;line-height:1.45;padding:3px 1px}.attentionFlag{display:inline-block;font-size:9px;font-weight:900;border-radius:99px;padding:2px 5px;margin-left:5px;border:1px solid var(--line)}.attentionFlag.move{color:var(--blue)}.attentionFlag.value{color:var(--green)}.attentionFlag.risk{color:var(--gold)}
 @media(min-width:760px){
   .controls{grid-template-columns:2fr 1fr auto auto}.controls input{grid-column:auto}
-  .list{grid-template-columns:1fr 1fr}.summary{grid-template-columns:1fr 1fr}.attentionGrid{grid-template-columns:1fr 1fr}.attentionItem:first-child{grid-column:1/-1}
+  .list{grid-template-columns:1fr 1fr}.summary{grid-template-columns:1fr 1fr}
 }
 </style>
 </head>
@@ -78,11 +73,6 @@ summary{font-weight:850;cursor:pointer}.settings{display:grid;gap:9px;margin-top
     <button id="stop">Stop</button>
   </div>
   <div id="status" class="status" role="status" aria-live="polite">Open Settings once, add a free Finnhub API key, and press Refresh.</div>
-
-  <section id="attentionPanel" class="attention" aria-live="polite">
-    <div class="attentionHead"><div><h2>What deserves my attention today?</h2><div class="name">Uses only the Board data already loaded — no extra market requests</div></div><div id="attentionStamp" class="attentionStamp">Waiting for data</div></div>
-    <div id="attentionGrid" class="attentionGrid"><div class="attentionEmpty">Refresh the Board or use saved data to see today's priorities.</div></div>
-  </section>
 
   <div class="tabs">
     <button class="active" data-view="all">All stocks</button>
@@ -288,43 +278,8 @@ function mini(items){
   if(!items.length)return '<div class="name">Waiting for data…</div>';
   return items.slice(0,5).map(x=>`<div class="mini"><div><span class="ticker">${safe(x.symbol)}</span><div class="name">${safe(x.name)}</div></div><b class="${cls(x.dayPct)}">${pct(x.dayPct)}</b></div>`).join("");
 }
-function attentionReason(x){
-  const reasons=[];
-  if(Number.isFinite(x.dayPct)&&Math.abs(x.dayPct)>=3)reasons.push(`${pct(x.dayPct)} today`);
-  if(Number.isFinite(x.belowHigh)&&x.belowHigh<=-12&&x.belowHigh>=-35)reasons.push(`${num(Math.abs(x.belowHigh),0)}% below ${YEAR} high`);
-  if(Number.isFinite(x.vsAvg)&&x.vsAvg<0&&x.vsAvg>=-20)reasons.push(`${num(Math.abs(x.vsAvg),0)}% below ${YEAR} average`);
-  if(Number.isFinite(x.range)&&x.range<=25)reasons.push(`near lower end of ${YEAR} range`);
-  if(Number.isFinite(x.ytd)&&x.ytd<=-20)reasons.push(`${pct(x.ytd)} this year`);
-  return reasons.slice(0,3).join(" • ")||"worth a closer look from the current Board data";
-}
-function attentionPriority(x){
-  let score=0;
-  if(Number.isFinite(x.dayPct))score+=Math.min(30,Math.abs(x.dayPct)*3);
-  if(Number.isFinite(x.belowHigh)&&x.belowHigh<=-12&&x.belowHigh>=-35)score+=22;
-  if(Number.isFinite(x.vsAvg)&&x.vsAvg<0&&x.vsAvg>=-20)score+=18;
-  if(Number.isFinite(x.range)&&x.range<=25)score+=15;
-  if(Number.isFinite(x.ytd)&&x.ytd<=-20)score+=12;
-  return score;
-}
-function attentionType(x){
-  if(Number.isFinite(x.dayPct)&&Math.abs(x.dayPct)>=5)return["BIG MOVE","move"];
-  if((Number.isFinite(x.belowHigh)&&x.belowHigh<=-12&&x.belowHigh>=-35)||(Number.isFinite(x.vsAvg)&&x.vsAvg<0&&x.vsAvg>=-20))return["WATCH","value"];
-  return["CAUTION","risk"];
-}
-function renderAttention(all){
-  const grid=$("attentionGrid"),stamp=$("attentionStamp");if(!grid||!stamp)return;
-  const usable=all.filter(x=>Number.isFinite(x.price));
-  const candidates=usable.filter(x=>(Number.isFinite(x.dayPct)&&Math.abs(x.dayPct)>=3)||(Number.isFinite(x.belowHigh)&&x.belowHigh<=-12&&x.belowHigh>=-35)||(Number.isFinite(x.vsAvg)&&x.vsAvg<0&&x.vsAvg>=-20)||(Number.isFinite(x.range)&&x.range<=25)||(Number.isFinite(x.ytd)&&x.ytd<=-20))
-    .sort((a,b)=>attentionPriority(b)-attentionPriority(a)).slice(0,5);
-  const newest=Math.max(0,...usable.map(x=>Number(x.quoteAt)||0));
-  stamp.textContent=newest?`Quotes ${new Date(newest).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})}`:"Saved Board data";
-  if(!candidates.length){grid.innerHTML='<div class="attentionEmpty"><b>Nothing stands out strongly right now.</b><br>This section will update automatically from the same quote and yearly data the Board already uses.</div>';return;}
-  grid.innerHTML=candidates.map((x,i)=>{const[t,k]=attentionType(x);return `<article class="attentionItem"><div class="attentionRank">${i+1}</div><div><div class="attentionTicker">${safe(x.symbol)}<span class="attentionFlag ${k}">${t}</span></div><div class="attentionWhy">${safe(attentionReason(x))}</div></div><button class="attentionAction" onclick="location.href='x-ray.html?ticker=${encodeURIComponent(x.symbol)}'">X-Ray</button></article>`}).join("");
-}
-
 function render(){
   const all=watch.map(w=>calculated({...w,...(data[w.symbol]||{})})).filter(x=>Number.isFinite(x.dayPct));
-  renderAttention(all);
   $("gainers").innerHTML=mini([...all].sort((a,b)=>b.dayPct-a.dayPct));
   $("losers").innerHTML=mini([...all].sort((a,b)=>a.dayPct-b.dayPct));
   const rows=allRows();
