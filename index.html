@@ -286,7 +286,7 @@ function render(){
   $("list").innerHTML=rows.length?rows.map(x=>`
     <article class="stock">
       <div class="stock-top">
-        <div><a href="https://finance.yahoo.com/quote/${encodeURIComponent(x.symbol)}" target="_blank" rel="noopener"><div class="symbol">${safe(x.symbol)}</div><div class="company">${safe(x.name)}</div></a></div>
+        <div><a href="x-ray.html?ticker=${encodeURIComponent(x.symbol)}"><div class="symbol">${safe(x.symbol)}</div><div class="company">${safe(x.name)}</div></a></div>
         <div><div class="price">${Number.isFinite(x.price)?"$"+num(x.price):"—"}</div><div class="day ${cls(x.dayPct)}">${pct(x.dayPct)}</div></div>
       </div>
       <div class="metrics">
@@ -331,7 +331,7 @@ async function refresh(){
       if(results[0].status==="fulfilled")ok++;else fail++;
     }catch(e){fail++}
     save();render();
-    if(!stopped&&i<symbols.length-1)await sleep(1100);
+    if(!stopped&&i<symbols.length-1)await sleep(1000);
   }
   $("status").textContent=`${stopped?"Stopped":"Finished"}: ${ok} quotes loaded; ${fail} quotes unavailable. ${historyOK} yearly histories loaded; ${reused} reused; ${historyFail} history updates unavailable.${historyFail?" Saved history is retained where available. Press Refresh to retry.":""} Updated ${new Date().toLocaleTimeString()}.`;
   }catch{$("status").textContent="Refresh interrupted. Data is shown, but browser storage may be full or unavailable."}
