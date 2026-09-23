@@ -122,7 +122,7 @@ const ORIGINAL=[
 ["WDC","Western Digital"],["DELL","Dell Technologies"],["CSCO","Cisco Systems"],["DUK","Duke Energy"],["ANET","Arista Networks"]
 ];
 const $=id=>document.getElementById(id);
-const YEAR=new Date().getFullYear(),HISTORY_SCHEMA=2,HISTORY_TTL=12*60*60*1000;
+const YEAR=new Date().getFullYear(),HISTORY_SCHEMA=2,HISTORY_TTL=12*60*60*1000,HISTORY_RETRY_TTL=24*60*60*1000;
 function readSaved(key,fallback){try{return JSON.parse(localStorage.getItem(key)||"null")??fallback}catch{return fallback}}
 const validSymbol=s=>typeof s==="string"&&/^[A-Z0-9^][A-Z0-9.^=-]{0,19}$/.test(s);
 // Nasdaq's temporary SKHYV ticker became SKHY on July 13, 2026.
@@ -138,7 +138,7 @@ watch=watch.filter(x=>x&&validSymbol(x.symbol)).map(x=>{
 }).filter(x=>!seenSymbols.has(x.symbol)&&seenSymbols.add(x.symbol));
 let data=readSaved("steveDataV2",{});
 if(!data||typeof data!=="object"||Array.isArray(data))data={};
-let stopped=false, view="all";
+let stopped=false, view="all", historySession=0;
 $("apiKey").value=localStorage.getItem("finnhubKey")||"";
 
 function save(){localStorage.setItem("steveWatchV2",JSON.stringify(watch));localStorage.setItem("steveDataV2",JSON.stringify(data))}
@@ -208,6 +208,11 @@ function parseYear(j,symbol){
   };
 }
 function hasYear(x){return x?.historySchema===HISTORY_SCHEMA&&x.historyYear===YEAR&&positive(x.yearAvg)&&positive(x.yearFirst)&&positive(x.yearLast)&&positive(x.yearAt)}
+function shouldUpdateHistory(x){
+  // A failed provider must not make every tap of Refresh re-run 48 slow requests.
+  if(x?.historyError&&Date.now()-(x.historyRetryAt||0)<HISTORY_RETRY_TTL)return false;
+  return !hasYear(x)||(Date.now()-x.yearAt)>HISTORY_TTL;
+}
 function currentData(x={}){
   if(!x||typeof x!=="object")return {};
   if(hasYear(x))return x;
@@ -304,41 +309,62 @@ function render(){
       <div class="note" style="margin-top:9px">${safe(historyNote(x))}</div>
     </article>`).join(""):'<div class="empty">No stocks match this view.</div>';
 }
+async function refreshHistory(symbols,session){
+  let historyOK=0,historyFail=0,reused=0;
+  for(let i=0;i<symbols.length;i++){
+    if(stopped||session!==historySession)break;
+    const s=symbols[i],old=currentData(data[s]);
+    if(!shouldUpdateHistory(old)){reused++;continue}
+    $("status").textContent=`Live quotes are ready. Updating yearly history quietly: ${i+1} of ${symbols.length}: ${s}. Updated: ${historyOK}; unavailable: ${historyFail}.`;
+    try{
+      const year=await getYear(s);
+      if(stopped||session!==historySession)break;
+      data[s]={...old,...year};historyOK++;
+    }catch(e){
+      if(stopped||session!==historySession)break;
+      // Keep any previous good yearly figures and wait a day before another retry.
+      data[s]={...old,historyError:String(e?.message||"History unavailable"),historyRetryAt:Date.now()};historyFail++;
+    }
+    save();render();
+    if(i<symbols.length-1)await sleep(750);
+  }
+  if(session===historySession){
+    $("status").textContent=`Live quotes are ready. Yearly history: ${historyOK} updated; ${reused} reused; ${historyFail} unavailable. Saved history remains in use where available. Updated ${new Date().toLocaleTimeString()}.`;
+  }
+}
 async function refresh(){
   if($("refresh").disabled)return;
   const key=$("apiKey").value.trim();
   if(!key){$("status").textContent="Open Settings and enter a free Finnhub API key first.";return}
   stopped=false;$("refresh").disabled=true;
-  let ok=0,fail=0,historyOK=0,historyFail=0,reused=0;
+  const session=++historySession;
+  let ok=0,fail=0;
   const symbols=watch.map(x=>x.symbol);
   try{for(let i=0;i<symbols.length;i++){
     if(stopped)break;
     const s=symbols[i];
     if(!watch.some(x=>x.symbol===s))continue;
     const old=currentData(data[s]);
-    $("status").textContent=`Loading ${i+1} of ${symbols.length}: ${s}. Quotes: ${ok}; yearly histories: ${historyOK+reused}; history failures: ${historyFail}.`;
-    const needYear=!hasYear(old)||Boolean(old.historyError)||(Date.now()-old.yearAt)>HISTORY_TTL;
+    $("status").textContent=`Loading live quote ${i+1} of ${symbols.length}: ${s}. Quotes: ${ok}.`;
     try{
-      const results=await Promise.allSettled([getQuote(s,key),needYear?getYear(s):Promise.resolve({})]);
+      const quote=await getQuote(s,key);
       const merged={...old};
-      if(results[1].status==="fulfilled"){
-        Object.assign(merged,results[1].value);
-        if(needYear)historyOK++;else reused++;
-      }else{historyFail++;merged.historyError=String(results[1].reason?.message||"History unavailable; press Refresh to retry.")}
-      // Quotes own the live price and daily change. History owns yearly fields only.
-      if(results[0].status==="fulfilled")Object.assign(merged,results[0].value);
+      // Quotes are always first. Yearly history is a background task, not a gate.
+      Object.assign(merged,quote);
       if(watch.some(x=>x.symbol===s))data[s]=merged;
-      if(results[0].status==="fulfilled")ok++;else fail++;
+      ok++;
     }catch(e){fail++}
     save();render();
-    if(!stopped&&i<symbols.length-1)await sleep(1000);
+    if(!stopped&&i<symbols.length-1)await sleep(250);
   }
-  $("status").textContent=`${stopped?"Stopped":"Finished"}: ${ok} quotes loaded; ${fail} quotes unavailable. ${historyOK} yearly histories loaded; ${reused} reused; ${historyFail} history updates unavailable.${historyFail?" Saved history is retained where available. Press Refresh to retry.":""} Updated ${new Date().toLocaleTimeString()}.`;
+  if(stopped){$("status").textContent=`Stopped: ${ok} quotes loaded; ${fail} unavailable.`;return}
+  $("status").textContent=`Live quotes ready: ${ok} loaded; ${fail} unavailable. Yearly history is updating quietly in the background.`;
+  void refreshHistory(symbols,session);
   }catch{$("status").textContent="Refresh interrupted. Data is shown, but browser storage may be full or unavailable."}
   finally{$("refresh").disabled=false}
 }
 window.removeStock=s=>{watch=watch.filter(x=>x.symbol!==s);delete data[s];save();render()};
-$("refresh").onclick=refresh;$("stop").onclick=()=>stopped=true;
+$("refresh").onclick=refresh;$("stop").onclick=()=>{stopped=true;historySession++};
 $("search").oninput=render;$("sort").onchange=render;
 document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{
   document.querySelectorAll(".tabs button").forEach(x=>x.classList.remove("active"));
