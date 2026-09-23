@@ -122,7 +122,7 @@ const ORIGINAL=[
 ["WDC","Western Digital"],["DELL","Dell Technologies"],["CSCO","Cisco Systems"],["DUK","Duke Energy"],["ANET","Arista Networks"]
 ];
 const $=id=>document.getElementById(id);
-const YEAR=new Date().getFullYear(),HISTORY_SCHEMA=1,HISTORY_TTL=12*60*60*1000;
+const YEAR=new Date().getFullYear(),HISTORY_SCHEMA=2,HISTORY_TTL=12*60*60*1000;
 function readSaved(key,fallback){try{return JSON.parse(localStorage.getItem(key)||"null")??fallback}catch{return fallback}}
 const validSymbol=s=>typeof s==="string"&&/^[A-Z0-9^][A-Z0-9.^=-]{0,19}$/.test(s);
 // Nasdaq's temporary SKHYV ticker became SKHY on July 13, 2026.
@@ -232,11 +232,19 @@ async function getRepoHistory(){
   if(repoHistoryPromise)return repoHistoryPromise;
   repoHistoryPromise=(async()=>{
     try{
-      const r=await fetch(`./history.json?v=${Date.now()}`,{cache:"no-store"});
+      const url=new URL("history.json",window.location.href);
+      url.searchParams.set("v",Date.now());
+      const r=await fetch(url.href,{cache:"no-store"});
       if(!r.ok)throw Error(`history.json HTTP ${r.status}`);
       const j=await r.json();
-      return j&&j.year===YEAR&&j.stocks&&typeof j.stocks==="object"?j:null;
-    }catch{ return null; }
+      if(!(j&&Number(j.year)===YEAR&&j.stocks&&typeof j.stocks==="object"))
+        throw Error("history.json has unexpected contents");
+      return j;
+    }catch(e){
+      console.error("Stock Board history.json load failed:",e);
+      repoHistoryPromise=null;
+      return null;
+    }
   })();
   return repoHistoryPromise;
 }
